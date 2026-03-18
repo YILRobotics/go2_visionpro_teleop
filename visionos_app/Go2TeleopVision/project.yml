@@ -1,0 +1,32 @@
+name: Go2TeleopVision
+options:
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: 5.10
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 1.0
+targets:
+  Go2TeleopVision:
+    type: application
+    platform: visionOS
+    deploymentTarget: "1.0"
+    sources:
+      - path: Sources/Go2TeleopVision
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.unitree.go2teleopvision
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Go2TeleopVision
+        INFOPLIST_KEY_NSHandsTrackingUsageDescription: Hand tracking is used to teleoperate Go2.
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        PRODUCT_NAME: Go2TeleopVision
+schemes:
+  Go2TeleopVision:
+    build:
+      targets:
+        Go2TeleopVision: all
+    run:
+      config: Debug
+    archive:
+      config: Release
