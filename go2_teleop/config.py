@@ -58,6 +58,8 @@ class AppConfig:
             raise ValueError(f"Unsupported simulation mode: {self.simulation_mode}")
         if self.simulation_canvas_px < 320:
             raise ValueError("--simulation-canvas-px must be >= 320.")
+        if self.webcam_index < -1:
+            raise ValueError("--webcam-index must be >= -1.")
 
     @classmethod
     def from_cli(cls) -> "AppConfig":
@@ -157,7 +159,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use local webcam and log commands instead of controlling a real Go2.",
     )
-    parser.add_argument("--webcam-index", type=int, default=0, help="OpenCV camera index for dry-run mode.")
+    parser.add_argument(
+        "--webcam-index",
+        type=int,
+        default=0,
+        help=(
+            "OpenCV camera index for local camera feed. "
+            "On macOS, index 0 uses auto-selection that prefers the built-in webcam over iPhone/Continuity camera. "
+            "Use -1 to disable webcam and use synthetic placeholder feed."
+        ),
+    )
     parser.add_argument(
         "--simulation-mode",
         choices=["off", "block"],

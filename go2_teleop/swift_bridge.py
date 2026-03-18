@@ -138,16 +138,20 @@ class SwiftBridgeServer:
             import websockets
         except ModuleNotFoundError as exc:
             raise SwiftBridgeUnavailable(
-                "Missing dependency `websockets`. Run `pip install -e .` in go2_teleop."
+                "Missing dependency `websockets`. Run `python3 -m pip install -e .` from the repo root."
             ) from exc
+        self._ws_ready.clear()
+        self._ws_start_error = None
 
         def runner() -> None:
             loop = asyncio.new_event_loop()
             self._ws_loop = loop
             asyncio.set_event_loop(loop)
 
-            async def handler(websocket) -> None:
-                path = getattr(websocket, "path", "/ws")
+            async def handler(websocket, path: Optional[str] = None) -> None:
+                request = getattr(websocket, "request", None)
+                request_path = getattr(request, "path", None)
+                path = path or getattr(websocket, "path", None) or request_path or "/ws"
                 if path != "/ws":
                     try:
                         await websocket.close(code=1008, reason="Use /ws endpoint")
@@ -158,9 +162,10 @@ class SwiftBridgeServer:
                     await self._on_ws_message(message, websocket)
 
             try:
-                self._ws_server = loop.run_until_complete(
-                    websockets.serve(handler, self.bind_host, self.ws_port)
-                )
+                async def create_server():
+                    return await websockets.serve(handler, self.bind_host, self.ws_port)
+
+                self._ws_server = loop.run_until_complete(create_server())
                 self._ws_ready.set()
             except Exception as exc:
                 self._ws_start_error = exc
@@ -170,8 +175,9 @@ class SwiftBridgeServer:
             try:
                 loop.run_forever()
             finally:
-                self._ws_server.close()
-                loop.run_until_complete(self._ws_server.wait_closed())
+                if self._ws_server is not None:
+                    self._ws_server.close()
+                    loop.run_until_complete(self._ws_server.wait_closed())
                 loop.close()
 
         self._ws_thread = threading.Thread(target=runner, name="swift-ws-server", daemon=True)

@@ -15,6 +15,7 @@ from .swift_bridge import SwiftBridgeServer
 from .unitree_bridge import (
     DryRunMotionClient,
     OpenCVCameraClient,
+    PlaceholderCameraClient,
     UnitreeGo2CameraClient,
     UnitreeGo2MotionClient,
     initialize_unitree_dds,
@@ -90,7 +91,7 @@ class Go2TeleopApp:
 
     def _setup_clients(self) -> None:
         if self.cfg.simulation_mode == "block":
-            self._camera_client = OpenCVCameraClient(self.cfg.webcam_index)
+            self._camera_client = self._create_local_camera_client()
             self._motion_client = None
             self._simulator = RedBlockSimulator(canvas_px=self.cfg.simulation_canvas_px)
             self._simulator.start()
@@ -98,7 +99,7 @@ class Go2TeleopApp:
             return
 
         if self.cfg.dry_run:
-            self._camera_client = OpenCVCameraClient(self.cfg.webcam_index)
+            self._camera_client = self._create_local_camera_client()
             self._motion_client = None if self.cfg.no_motion else DryRunMotionClient()
             LOGGER.info("Running in dry-run mode (webcam + logged commands).")
             return
@@ -110,12 +111,19 @@ class Go2TeleopApp:
         if self.cfg.start_stand and self._motion_client is not None:
             self._motion_client.stand_up()
 
+    def _create_local_camera_client(self):
+        if self.cfg.webcam_index < 0:
+            LOGGER.info("Local webcam disabled (--webcam-index %d). Using synthetic placeholder feed.", self.cfg.webcam_index)
+            return PlaceholderCameraClient()
+        return OpenCVCameraClient(self.cfg.webcam_index)
+
     def _setup_vision_stream(self) -> None:
         try:
             VisionProStreamer = _load_vision_pro_streamer()
         except ModuleNotFoundError as exc:
             raise ModuleNotFoundError(
-                "Could not import avp_stream. Install it or keep visionProTeleop next to go2_teleop."
+                "Could not import avp_stream. Install AVP extras with "
+                "`python3 -m pip install -e \".[avp]\"` or keep visionProTeleop next to this repo."
             ) from exc
 
         if not self.cfg.vision_pro_ip:

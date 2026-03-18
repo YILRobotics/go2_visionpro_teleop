@@ -20,7 +20,7 @@ def main() -> None:
     except ModuleNotFoundError as exc:
         missing = exc.name or "unknown module"
         raise SystemExit(
-            f"Missing dependency '{missing}'. Run `pip install -e .` in go2_teleop first."
+            f"Missing dependency '{missing}'. Run `python3 -m pip install -e .` from the repo root first."
         ) from exc
 
     app = Go2TeleopApp(config)

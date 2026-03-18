@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import importlib
 import logging
+import platform
+import re
+import subprocess
 import time
 from typing import Any, Iterable, Optional
 
@@ -141,11 +144,35 @@ class UnitreeGo2MotionClient:
 
 class OpenCVCameraClient:
     def __init__(self, camera_index: int = 0) -> None:
-        self._cap = cv2.VideoCapture(camera_index)
-        if not self._cap.isOpened():
-            raise RuntimeError(f"Failed to open webcam index {camera_index}.")
+        self._cap: Optional[cv2.VideoCapture] = None
+        if platform.system().lower() == "darwin" and camera_index == 0:
+            listed = _mac_avfoundation_video_devices()
+            if listed:
+                formatted = ", ".join(f"[{idx}] {name}" for idx, name in listed)
+                LOGGER.info("Detected macOS cameras: %s", formatted)
+        attempts = list(_iter_camera_open_attempts(camera_index))
+        for idx, backend in attempts:
+            cap = _open_camera_capture(idx, backend)
+            if cap is None:
+                continue
+            self._cap = cap
+            backend_name = _camera_backend_name(backend)
+            LOGGER.info("Opened webcam index %d using backend %s.", idx, backend_name)
+            break
+
+        if self._cap is None:
+            attempt_text = ", ".join(
+                f"{idx}/{_camera_backend_name(backend)}" for idx, backend in attempts
+            )
+            raise RuntimeError(
+                f"Failed to open webcam. Tried: {attempt_text}. "
+                "On macOS, grant Camera permission to your terminal in "
+                "System Settings > Privacy & Security > Camera."
+            )
 
     def read_frame(self) -> Optional[np.ndarray]:
+        if self._cap is None:
+            return None
         ok, frame = self._cap.read()
         if not ok:
             return None
@@ -154,6 +181,50 @@ class OpenCVCameraClient:
     def close(self) -> None:
         if self._cap is not None:
             self._cap.release()
+            self._cap = None
+
+
+class PlaceholderCameraClient:
+    """Synthetic camera feed used when local webcam access is unavailable."""
+
+    def __init__(self, width: int = 1280, height: int = 720) -> None:
+        self._width = width
+        self._height = height
+        self._tick = 0
+
+    def read_frame(self) -> Optional[np.ndarray]:
+        self._tick += 1
+        frame = np.full((self._height, self._width, 3), 18, dtype=np.uint8)
+
+        # Simple animated bar so operators can see stream freshness.
+        bar_w = max(80, self._width // 8)
+        x = (self._tick * 8) % max(1, self._width - bar_w)
+        cv2.rectangle(frame, (x, self._height - 36), (x + bar_w, self._height - 12), (0, 100, 220), -1)
+
+        cv2.putText(
+            frame,
+            "Local camera unavailable",
+            (32, 64),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.0,
+            (230, 230, 230),
+            2,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            frame,
+            "Allow camera permission or set --webcam-index to a valid device.",
+            (32, 104),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.72,
+            (200, 200, 200),
+            2,
+            cv2.LINE_AA,
+        )
+        return frame
+
+    def close(self) -> None:
+        return
 
 
 class UnitreeGo2CameraClient:
@@ -264,3 +335,139 @@ class UnitreeGo2CameraClient:
             except Exception:
                 continue
         return False
+
+
+def _iter_camera_open_attempts(camera_index: int) -> Iterable[tuple[int, int]]:
+    system = platform.system().lower()
+    cap_any = getattr(cv2, "CAP_ANY", 0)
+    cap_avfoundation = getattr(cv2, "CAP_AVFOUNDATION", cap_any)
+    cap_v4l2 = getattr(cv2, "CAP_V4L2", cap_any)
+    cap_gstreamer = getattr(cv2, "CAP_GSTREAMER", cap_any)
+
+    if system == "darwin":
+        backend_order = [cap_avfoundation, cap_any]
+    elif system == "linux":
+        backend_order = [cap_v4l2, cap_gstreamer, cap_any]
+    else:
+        backend_order = [cap_any]
+
+    if system == "darwin":
+        candidate_indices = _preferred_mac_camera_indices(camera_index)
+    else:
+        candidate_indices = [camera_index]
+        if camera_index == 0:
+            # Common case: default index is wrong on some Linux setups.
+            candidate_indices.extend([1, 2])
+
+    seen: set[tuple[int, int]] = set()
+    for idx in candidate_indices:
+        for backend in backend_order:
+            key = (idx, backend)
+            if key in seen:
+                continue
+            seen.add(key)
+            yield key
+
+
+def _open_camera_capture(camera_index: int, backend: int) -> Optional[cv2.VideoCapture]:
+    cap_any = getattr(cv2, "CAP_ANY", 0)
+    cap: cv2.VideoCapture
+    if backend == cap_any:
+        cap = cv2.VideoCapture(camera_index)
+    else:
+        cap = cv2.VideoCapture(camera_index, backend)
+
+    if not cap.isOpened():
+        cap.release()
+        return None
+
+    # Reduce buffering latency when backend supports it.
+    try:
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    except Exception:
+        pass
+
+    # Validate by trying to read a few startup frames.
+    for _ in range(5):
+        ok, frame = cap.read()
+        if ok and frame is not None and frame.size > 0:
+            return cap
+        time.sleep(0.04)
+
+    cap.release()
+    return None
+
+
+def _camera_backend_name(backend: int) -> str:
+    cap_any = getattr(cv2, "CAP_ANY", 0)
+    cap_avfoundation = getattr(cv2, "CAP_AVFOUNDATION", cap_any)
+    cap_v4l2 = getattr(cv2, "CAP_V4L2", cap_any)
+    cap_gstreamer = getattr(cv2, "CAP_GSTREAMER", cap_any)
+
+    if backend == cap_any:
+        return "CAP_ANY"
+    if backend == cap_avfoundation:
+        return "CAP_AVFOUNDATION"
+    if backend == cap_v4l2:
+        return "CAP_V4L2"
+    if backend == cap_gstreamer:
+        return "CAP_GSTREAMER"
+    return str(int(backend))
+
+
+def _preferred_mac_camera_indices(camera_index: int) -> list[int]:
+    if camera_index != 0:
+        return [camera_index]
+
+    from_ffmpeg = _mac_avfoundation_video_devices()
+    if from_ffmpeg:
+        non_iphone = [idx for idx, name in from_ffmpeg if not _is_iphone_camera_name(name)]
+        iphone = [idx for idx, name in from_ffmpeg if _is_iphone_camera_name(name)]
+        ordered = non_iphone + iphone
+        if ordered:
+            return ordered
+
+    # Heuristic fallback: on many Macs with Continuity Camera, index 1 is built-in webcam.
+    return [1, 0, 2, 3]
+
+
+def _mac_avfoundation_video_devices() -> list[tuple[int, str]]:
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-f", "avfoundation", "-list_devices", "true", "-i", ""],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return []
+    except Exception:
+        return []
+
+    text = (proc.stderr or "") + "\n" + (proc.stdout or "")
+    video_devices: list[tuple[int, str]] = []
+    in_video_section = False
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if "AVFoundation video devices" in line:
+            in_video_section = True
+            continue
+        if "AVFoundation audio devices" in line:
+            in_video_section = False
+        if not in_video_section:
+            continue
+
+        # Example: [AVFoundation input device @ ...] [0] FaceTime HD Camera
+        match = re.search(r"\[(\d+)\]\s+(.+)$", line)
+        if not match:
+            continue
+        idx = int(match.group(1))
+        name = match.group(2).strip()
+        video_devices.append((idx, name))
+
+    return video_devices
+
+
+def _is_iphone_camera_name(name: str) -> bool:
+    lowered = name.lower()
+    return "iphone" in lowered or "continuity" in lowered

@@ -24,7 +24,7 @@ Unneeded cloud/calibration onboarding was removed from the new flow.
 
 ## What It Does
 
-- Uses `VisionProStreamer` from `avp_stream` for tracking and WebRTC stream output.
+- Uses `VisionProStreamer` from `avp_stream` for AVP mode (optional dependency).
 - Uses Unitree SDK clients for:
   - Go2 camera frames
   - Go2 movement commands (base velocity)
@@ -101,7 +101,13 @@ For local testing, regular **Run** is usually enough.
 
 ```bash
 cd /Users/ferdinand/unitree/go2_visionpro_teleop
-pip install -e .
+python3 -m pip install -e .
+```
+
+For AVP input mode (Tracking Streamer compatible), install optional extras:
+
+```bash
+python3 -m pip install -e ".[avp]"
 ```
 
 2. Run teleop:
@@ -132,10 +138,29 @@ This mode does not command a robot. It:
 Run it with the Swift app input:
 
 ```bash
-python -m go2_teleop.main --input-source swift --simulation-mode block
+python3 -m go2_teleop.main --input-source swift --simulation-mode block --webcam-index 1
 ```
 
 Press `q` in the simulation window to close the local viewer.
+
+Camera behavior:
+
+- default `--webcam-index 0` on macOS uses auto-selection and prefers built-in webcam over iPhone/Continuity camera
+- set explicit `--webcam-index N` to force a specific camera
+- set `--webcam-index -1` only if you explicitly want synthetic placeholder feed
+
+macOS permission fix:
+
+```bash
+tccutil reset Camera
+```
+
+Then allow camera access for your terminal app in System Settings.
+
+Ubuntu camera hint:
+
+- if `/dev/video0` is not your camera, run with `--webcam-index 1` (or `2`, etc.)
+- if you do not want any local webcam at all (for example to avoid Continuity Camera on macOS), use `--webcam-index -1`
 
 ## Useful Flags
 
