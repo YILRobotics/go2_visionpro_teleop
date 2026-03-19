@@ -169,6 +169,7 @@ class VPStreamer(Node):
         self._controller_filt_dot_x = 0.0
         self._controller_filt_dot_y = 0.0
         self._controller_filt_cmd_linear_x = 0.0
+        self._controller_filt_cmd_linear_y = 0.0
         self._controller_filt_cmd_angular_z = 0.0
         self._controller_max_delta_m = max(0.05, float(params["controller_max_delta_m"]))
         self._controller_deadzone = float(np.clip(params["controller_deadzone"], 0.0, 0.5))
@@ -525,6 +526,7 @@ class VPStreamer(Node):
             self._controller_filt_dot_x = 0.0
             self._controller_filt_dot_y = 0.0
             self._controller_filt_cmd_linear_x = 0.0
+            self._controller_filt_cmd_linear_y = 0.0
             self._controller_filt_cmd_angular_z = 0.0
         self.get_logger().info(f"Controller mode {'enabled' if enabled else 'disabled'} from VisionOS")
     
@@ -560,9 +562,10 @@ class VPStreamer(Node):
             yaw = 0.0
         return roll, pitch, yaw
     
-    def _publish_cmd_vel(self, linear_x: float, angular_z: float) -> None:
+    def _publish_cmd_vel(self, linear_x: float, linear_y: float, angular_z: float) -> None:
         msg = Twist()
         msg.linear.x = float(linear_x)
+        msg.linear.y = float(linear_y)
         msg.angular.z = float(angular_z)
         self._cmd_vel_pub.publish(msg)
     
@@ -582,6 +585,7 @@ class VPStreamer(Node):
         dot_x: float,
         dot_y: float,
         cmd_linear_x: float,
+        cmd_linear_y: float,
         cmd_angular_z: float,
         head_roll: float,
         head_pitch: float,
@@ -592,19 +596,22 @@ class VPStreamer(Node):
             self._controller_filt_dot_x = 0.0
             self._controller_filt_dot_y = 0.0
             self._controller_filt_cmd_linear_x = 0.0
+            self._controller_filt_cmd_linear_y = 0.0
             self._controller_filt_cmd_angular_z = 0.0
         else:
             self._controller_filt_dot_x = (1.0 - alpha) * self._controller_filt_dot_x + alpha * float(dot_x)
             self._controller_filt_dot_y = (1.0 - alpha) * self._controller_filt_dot_y + alpha * float(dot_y)
             self._controller_filt_cmd_linear_x = (1.0 - alpha) * self._controller_filt_cmd_linear_x + alpha * float(cmd_linear_x)
+            self._controller_filt_cmd_linear_y = (1.0 - alpha) * self._controller_filt_cmd_linear_y + alpha * float(cmd_linear_y)
             self._controller_filt_cmd_angular_z = (1.0 - alpha) * self._controller_filt_cmd_angular_z + alpha * float(cmd_angular_z)
 
         cmd_linear_x_f = float(self._controller_filt_cmd_linear_x)
+        cmd_linear_y_f = float(self._controller_filt_cmd_linear_y)
         cmd_angular_z_f = float(self._controller_filt_cmd_angular_z)
         dot_x_f = float(self._controller_filt_dot_x)
         dot_y_f = float(self._controller_filt_dot_y)
 
-        self._publish_cmd_vel(cmd_linear_x_f, cmd_angular_z_f)
+        self._publish_cmd_vel(cmd_linear_x_f, cmd_linear_y_f, cmd_angular_z_f)
         self._publish_head_delta(head_roll, head_pitch, head_yaw)
         if self.streamer is not None:
             viz_scale = getattr(self, "_controller_viz_scale", 1.0)
@@ -618,6 +625,7 @@ class VPStreamer(Node):
                     "dot_x": dot_x_viz,
                     "dot_y": dot_y_viz,
                     "cmd_linear_x": cmd_linear_x_f,
+                    "cmd_linear_y": cmd_linear_y_f,
                     "cmd_angular_z": cmd_angular_z_f,
                     "head_delta_roll": float(head_roll),
                     "head_delta_pitch": float(head_pitch),
@@ -640,6 +648,7 @@ class VPStreamer(Node):
                     dot_x=0.0,
                     dot_y=0.0,
                     cmd_linear_x=0.0,
+                    cmd_linear_y=0.0,
                     cmd_angular_z=0.0,
                     head_roll=0.0,
                     head_pitch=0.0,
@@ -662,6 +671,7 @@ class VPStreamer(Node):
                 dot_x=0.0,
                 dot_y=0.0,
                 cmd_linear_x=0.0,
+                cmd_linear_y=0.0,
                 cmd_angular_z=0.0,
                 head_roll=0.0,
                 head_pitch=0.0,
@@ -717,10 +727,12 @@ class VPStreamer(Node):
             anchor = None
         
         cmd_linear_x = float(np.clip(dot_y * self._controller_linear_scale, -self._controller_max_linear_x, self._controller_max_linear_x))
-        cmd_angular_z = float(np.clip(-dot_x * self._controller_angular_scale, -self._controller_max_angular_z, self._controller_max_angular_z))
+        cmd_linear_y = float(np.clip(dot_x * self._controller_linear_scale, -self._controller_max_linear_x, self._controller_max_linear_x))
         
         delta_rot = head_ref_rot.T @ head_rot
         head_roll, head_pitch, head_yaw = self._matrix_to_rpy(delta_rot)
+        # Use head X rotation (roll) for robot yaw command instead of wrist/dot X.
+        cmd_angular_z = float(np.clip(head_roll * self._controller_angular_scale, -self._controller_max_angular_z, self._controller_max_angular_z))
         
         self._publish_controller_state(
             enabled=True,
@@ -728,6 +740,7 @@ class VPStreamer(Node):
             dot_x=dot_x,
             dot_y=dot_y,
             cmd_linear_x=cmd_linear_x,
+            cmd_linear_y=cmd_linear_y,
             cmd_angular_z=cmd_angular_z,
             head_roll=head_roll,
             head_pitch=head_pitch,
@@ -1372,7 +1385,7 @@ class VPStreamer(Node):
 
     def destroy_node(self):
         try:
-            self._publish_cmd_vel(0.0, 0.0)
+            self._publish_cmd_vel(0.0, 0.0, 0.0)
         except Exception:
             pass
         self._stop_event.set()

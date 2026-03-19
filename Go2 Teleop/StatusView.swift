@@ -231,6 +231,16 @@ struct StatusOverlay: View {
                         Circle()
                             .fill(dataManager.controllerTrackingActive ? Color.green : Color.gray.opacity(0.7))
                             .frame(width: 16, height: 16)
+                            .overlay(
+                                ZStack {
+                                    Rectangle()
+                                        .fill(Color.black.opacity(0.65))
+                                        .frame(width: 8, height: 1)
+                                    Rectangle()
+                                        .fill(Color.black.opacity(0.65))
+                                        .frame(width: 1, height: 8)
+                                }
+                            )
                             .offset(
                                 x: CGFloat(max(-1.0, min(1.0, dataManager.controllerDotX))) * 34.0,
                                 y: CGFloat(max(-1.0, min(1.0, -dataManager.controllerDotY))) * 34.0
@@ -251,7 +261,7 @@ struct StatusOverlay: View {
                 )
                 .cornerRadius(14)
                 .padding(.trailing, 10)
-                .padding(.bottom, isMinimized ? 120 : 10)
+                .padding(.bottom, isMinimized ? 150 : 10)
             }
         }
         .onAppear {
