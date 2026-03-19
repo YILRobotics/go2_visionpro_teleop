@@ -894,6 +894,9 @@ class VideoStreamManager: ObservableObject {
                 DataManager.shared.controllerDotY = 0.0
                 DataManager.shared.controllerCmdVelLinearX = 0.0
                 DataManager.shared.controllerCmdVelAngularZ = 0.0
+                DataManager.shared.controllerCmdRpyRoll = 0.0
+                DataManager.shared.controllerCmdRpyPitch = 0.0
+                DataManager.shared.controllerCmdRpyYaw = 0.0
                 DataManager.shared.controllerHeadDeltaRoll = 0.0
                 DataManager.shared.controllerHeadDeltaPitch = 0.0
                 DataManager.shared.controllerHeadDeltaYaw = 0.0

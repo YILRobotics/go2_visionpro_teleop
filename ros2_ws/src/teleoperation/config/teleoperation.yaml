@@ -27,8 +27,9 @@ vp_streamer:
     controller_mode_enabled_on_startup: false
     controller_cmd_vel_topic: "/cmd_vel"
     controller_head_delta_topic: "/teleop/head_delta_rpy"
+    controller_cmd_rpy_topic: "/cmd_rpy"
     controller_publish_hz: 30.0
-    controller_pinch_threshold: 0.008
+    controller_pinch_threshold: 0.01
     controller_viz_scale: 2.0
     controller_lpf_alpha: 0.25 # 1 = no filtering
     controller_max_delta_m: 0.20

@@ -326,6 +326,9 @@ class DataManager: ObservableObject {
     @Published var controllerDotY: Float = 0.0
     @Published var controllerCmdVelLinearX: Float = 0.0
     @Published var controllerCmdVelAngularZ: Float = 0.0
+    @Published var controllerCmdRpyRoll: Float = 0.0
+    @Published var controllerCmdRpyPitch: Float = 0.0
+    @Published var controllerCmdRpyYaw: Float = 0.0
     @Published var controllerHeadDeltaRoll: Float = 0.0
     @Published var controllerHeadDeltaPitch: Float = 0.0
     @Published var controllerHeadDeltaYaw: Float = 0.0

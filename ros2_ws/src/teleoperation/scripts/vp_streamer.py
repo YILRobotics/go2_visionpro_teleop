@@ -78,6 +78,7 @@ class VPStreamer(Node):
         self.declare_parameter("controller_mode_enabled_on_startup", False)
         self.declare_parameter("controller_cmd_vel_topic", "/cmd_vel")
         self.declare_parameter("controller_head_delta_topic", "/teleop/head_delta_rpy")
+        self.declare_parameter("controller_cmd_rpy_topic", "/cmd_rpy")
         self.declare_parameter("controller_publish_hz", 30.0)
         self.declare_parameter("controller_pinch_threshold", 0.025)
         self.declare_parameter("controller_viz_scale", 1.0)
@@ -180,6 +181,7 @@ class VPStreamer(Node):
 
         self._cmd_vel_pub = self.create_publisher(Twist, params["controller_cmd_vel_topic"], 10)
         self._head_delta_pub = self.create_publisher(Vector3Stamped, params["controller_head_delta_topic"], 10)
+        self._cmd_rpy_pub = self.create_publisher(Vector3Stamped, params["controller_cmd_rpy_topic"], 10)
 
         # TF listener must exist before any callbacks try to use it
         self.tf_buffer = Buffer()
@@ -336,6 +338,7 @@ class VPStreamer(Node):
         controller_mode_enabled_on_startup = self.get_parameter("controller_mode_enabled_on_startup").value
         controller_cmd_vel_topic = self.get_parameter("controller_cmd_vel_topic").value
         controller_head_delta_topic = self.get_parameter("controller_head_delta_topic").value
+        controller_cmd_rpy_topic = self.get_parameter("controller_cmd_rpy_topic").value
         controller_publish_hz = self.get_parameter("controller_publish_hz").value
         controller_pinch_threshold = self.get_parameter("controller_pinch_threshold").value
         controller_viz_scale = self.get_parameter("controller_viz_scale").value
@@ -371,6 +374,7 @@ class VPStreamer(Node):
             "controller_mode_enabled_on_startup": controller_mode_enabled_on_startup,
             "controller_cmd_vel_topic": controller_cmd_vel_topic,
             "controller_head_delta_topic": controller_head_delta_topic,
+            "controller_cmd_rpy_topic": controller_cmd_rpy_topic,
             "controller_publish_hz": controller_publish_hz,
             "controller_pinch_threshold": controller_pinch_threshold,
             "controller_viz_scale": controller_viz_scale,
@@ -566,8 +570,18 @@ class VPStreamer(Node):
         msg = Twist()
         msg.linear.x = float(linear_x)
         msg.linear.y = float(linear_y)
-        msg.angular.z = float(angular_z)
+        # Intentionally do not command yaw via /cmd_vel (handled via /cmd_rpy instead).
+        msg.angular.z = 0.0
         self._cmd_vel_pub.publish(msg)
+
+    def _publish_cmd_rpy(self, roll: float, pitch: float, yaw: float) -> None:
+        msg = Vector3Stamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = "vp_cmd_rpy_start"
+        msg.vector.x = float(roll)
+        msg.vector.y = float(pitch)
+        msg.vector.z = float(yaw)
+        self._cmd_rpy_pub.publish(msg)
     
     def _publish_head_delta(self, roll: float, pitch: float, yaw: float) -> None:
         msg = Vector3Stamped()
@@ -613,6 +627,10 @@ class VPStreamer(Node):
 
         self._publish_cmd_vel(cmd_linear_x_f, cmd_linear_y_f, cmd_angular_z_f)
         self._publish_head_delta(head_roll, head_pitch, head_yaw)
+        if tracking_active:
+            self._publish_cmd_rpy(head_roll, head_pitch, head_yaw)
+        else:
+            self._publish_cmd_rpy(0.0, 0.0, 0.0)
         if self.streamer is not None:
             viz_scale = getattr(self, "_controller_viz_scale", 1.0)
             dot_x_viz = float(np.clip(dot_x_f * viz_scale, -1.0, 1.0))
@@ -630,6 +648,10 @@ class VPStreamer(Node):
                     "head_delta_roll": float(head_roll),
                     "head_delta_pitch": float(head_pitch),
                     "head_delta_yaw": float(head_yaw),
+                    # Head delta RPY since pinch start; used by the Vision Pro UI to rotate the dot.
+                    "cmd_rpy_x": float(head_roll),
+                    "cmd_rpy_y": float(head_pitch),
+                    "cmd_rpy_z": float(head_yaw),
                 }
             )
     
@@ -700,18 +722,18 @@ class VPStreamer(Node):
         wrist_pos = right_wrist[:3, 3]
         
         with self._controller_lock:
-            if self._controller_head_ref_rot is None:
-                self._controller_head_ref_rot = head_rot.copy()
-            head_ref_rot = self._controller_head_ref_rot.copy()
             tracking_active = self._controller_tracking_active
             anchor = None if self._controller_anchor_wrist is None else self._controller_anchor_wrist.copy()
+            head_ref_rot = None if self._controller_head_ref_rot is None else self._controller_head_ref_rot.copy()
         
         if not tracking_active and pinch_distance <= self._controller_pinch_threshold:
             tracking_active = True
             anchor = wrist_pos.copy()
+            head_ref_rot = head_rot.copy()
         elif tracking_active and pinch_distance > self._controller_pinch_threshold:
             tracking_active = False
             anchor = None
+            head_ref_rot = None
         
         dot_x = 0.0
         dot_y = 0.0
@@ -728,11 +750,17 @@ class VPStreamer(Node):
         
         cmd_linear_x = float(np.clip(dot_y * self._controller_linear_scale, -self._controller_max_linear_x, self._controller_max_linear_x))
         cmd_linear_y = float(np.clip(dot_x * self._controller_linear_scale, -self._controller_max_linear_x, self._controller_max_linear_x))
-        
-        delta_rot = head_ref_rot.T @ head_rot
-        head_roll, head_pitch, head_yaw = self._matrix_to_rpy(delta_rot)
-        # Use head X rotation (roll) for robot yaw command instead of wrist/dot X.
-        cmd_angular_z = float(np.clip(head_roll * self._controller_angular_scale, -self._controller_max_angular_z, self._controller_max_angular_z))
+
+        if tracking_active and head_ref_rot is not None:
+            delta_rot = head_ref_rot.T @ head_rot
+            head_roll, head_pitch, head_yaw = self._matrix_to_rpy(delta_rot)
+            # Keep computing this for UI/telemetry, but do not publish it on /cmd_vel.
+            cmd_angular_z = float(np.clip(head_roll * self._controller_angular_scale, -self._controller_max_angular_z, self._controller_max_angular_z))
+        else:
+            head_roll = 0.0
+            head_pitch = 0.0
+            head_yaw = 0.0
+            cmd_angular_z = 0.0
         
         self._publish_controller_state(
             enabled=True,
@@ -750,6 +778,7 @@ class VPStreamer(Node):
         with self._controller_lock:
             self._controller_tracking_active = tracking_active
             self._controller_anchor_wrist = anchor
+            self._controller_head_ref_rot = head_ref_rot
             self._controller_dot_x = dot_x
             self._controller_dot_y = dot_y
             self._controller_zero_pending = False

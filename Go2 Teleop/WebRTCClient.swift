@@ -641,6 +641,9 @@ class WebRTCClient: NSObject, LKRTCPeerConnectionDelegate, @unchecked Sendable {
             DataManager.shared.controllerDotY = 0.0
             DataManager.shared.controllerCmdVelLinearX = 0.0
             DataManager.shared.controllerCmdVelAngularZ = 0.0
+            DataManager.shared.controllerCmdRpyRoll = 0.0
+            DataManager.shared.controllerCmdRpyPitch = 0.0
+            DataManager.shared.controllerCmdRpyYaw = 0.0
             DataManager.shared.controllerHeadDeltaRoll = 0.0
             DataManager.shared.controllerHeadDeltaPitch = 0.0
             DataManager.shared.controllerHeadDeltaYaw = 0.0
@@ -991,6 +994,9 @@ extension WebRTCClient: LKRTCDataChannelDelegate {
                     DataManager.shared.controllerDotY = 0.0
                     DataManager.shared.controllerCmdVelLinearX = 0.0
                     DataManager.shared.controllerCmdVelAngularZ = 0.0
+                    DataManager.shared.controllerCmdRpyRoll = 0.0
+                    DataManager.shared.controllerCmdRpyPitch = 0.0
+                    DataManager.shared.controllerCmdRpyYaw = 0.0
                     DataManager.shared.controllerHeadDeltaRoll = 0.0
                     DataManager.shared.controllerHeadDeltaPitch = 0.0
                     DataManager.shared.controllerHeadDeltaYaw = 0.0
@@ -1230,6 +1236,9 @@ extension WebRTCClient: LKRTCDataChannelDelegate {
                     DataManager.shared.controllerDotY = 0.0
                     DataManager.shared.controllerCmdVelLinearX = 0.0
                     DataManager.shared.controllerCmdVelAngularZ = 0.0
+                    DataManager.shared.controllerCmdRpyRoll = 0.0
+                    DataManager.shared.controllerCmdRpyPitch = 0.0
+                    DataManager.shared.controllerCmdRpyYaw = 0.0
                     DataManager.shared.controllerHeadDeltaRoll = 0.0
                     DataManager.shared.controllerHeadDeltaPitch = 0.0
                     DataManager.shared.controllerHeadDeltaYaw = 0.0
@@ -1255,6 +1264,15 @@ extension WebRTCClient: LKRTCDataChannelDelegate {
                 }
                 if let angularZ = self.parseFloat(payload["cmd_angular_z"]) {
                     DataManager.shared.controllerCmdVelAngularZ = angularZ
+                }
+                if let r = self.parseFloat(payload["cmd_rpy_x"]) {
+                    DataManager.shared.controllerCmdRpyRoll = r
+                }
+                if let p = self.parseFloat(payload["cmd_rpy_y"]) {
+                    DataManager.shared.controllerCmdRpyPitch = p
+                }
+                if let y = self.parseFloat(payload["cmd_rpy_z"]) {
+                    DataManager.shared.controllerCmdRpyYaw = y
                 }
                 if let roll = self.parseFloat(payload["head_delta_roll"]) {
                     DataManager.shared.controllerHeadDeltaRoll = roll

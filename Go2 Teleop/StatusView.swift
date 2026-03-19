@@ -240,6 +240,7 @@ struct StatusOverlay: View {
                                         .fill(Color.black.opacity(0.65))
                                         .frame(width: 1, height: 8)
                                 }
+                                .rotationEffect(.radians(Double(dataManager.controllerCmdRpyYaw)))
                             )
                             .offset(
                                 x: CGFloat(max(-1.0, min(1.0, dataManager.controllerDotX))) * 34.0,
