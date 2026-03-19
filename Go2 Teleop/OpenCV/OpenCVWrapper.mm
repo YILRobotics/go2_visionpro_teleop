@@ -523,7 +523,7 @@ std::vector<cv::Point2f> nsArrayToCorners(NSArray<NSValue *> *array) {
     
     // Map ID -> Index for fast lookup
     std::map<int, int> leftMap;
-    for (size_t i = 0; i < idsL.size(); i++) leftMap[idsL[i]] = i;
+    for (size_t i = 0; i < idsL.size(); i++) leftMap[idsL[i]] = static_cast<int>(i);
     
     for (size_t i = 0; i < idsR.size(); i++) {
         int id = idsR[i];
@@ -744,7 +744,6 @@ std::vector<cv::Point2f> nsArrayToCorners(NSArray<NSValue *> *array) {
     std::vector<std::vector<cv::Point3f>> objectPoints = _objectPointsList;
     std::vector<std::vector<cv::Point2f>> imagePoints = _leftImagePoints;
     cv::Size imageSize = _imageSize;
-    size_t totalSampleCount = _leftImagePoints.size();
     [_dataLock unlock];
     
     if (imagePoints.size() < static_cast<size_t>(minSamples)) {

@@ -542,6 +542,7 @@ class RecordingManager: ObservableObject {
         // Get image dimensions
         let width = Int(videoFrame.size.width)
         let height = Int(videoFrame.size.height)
+        let sessionID = self.sessionID
         
         // Do the rest on recording queue
         recordingQueue.async { [weak self] in
@@ -553,7 +554,7 @@ class RecordingManager: ObservableObject {
             if !self.isWriterSessionStarted {
                 do {
                     let baseURL = try self.getStorageURLSync()
-                    let recordingFolder = baseURL.appendingPathComponent(self.sessionID)
+                    let recordingFolder = baseURL.appendingPathComponent(sessionID)
                     try FileManager.default.createDirectory(at: recordingFolder, withIntermediateDirectories: true)
                     self.recordingFolderURL = recordingFolder
                     
@@ -662,17 +663,16 @@ class RecordingManager: ObservableObject {
         
         // Capture the latest tracking data
         let trackingData = DataManager.shared.latestHandTrackingData
+        let sessionID = self.sessionID
         
         recordingQueue.async { [weak self] in
             guard let self = self else { return }
-            
-            let frameIndex = self.pendingFrameCount
             
             // Create recording folder if needed (first frame)
             if self.recordingFolderURL == nil {
                 do {
                     let baseURL = try self.getStorageURLSync()
-                    let recordingFolder = baseURL.appendingPathComponent(self.sessionID)
+                    let recordingFolder = baseURL.appendingPathComponent(sessionID)
                     try FileManager.default.createDirectory(at: recordingFolder, withIntermediateDirectories: true)
                     self.recordingFolderURL = recordingFolder
                     dlog("📁 [RecordingManager] Created recording folder for hand tracking only: \(recordingFolder.lastPathComponent)")
@@ -1158,7 +1158,7 @@ class RecordingManager: ObservableObject {
         
         if let filesURL = URL(string: "shareddocuments://\(path)") {
             Task { @MainActor in
-                if await UIApplication.shared.canOpenURL(filesURL) {
+                if UIApplication.shared.canOpenURL(filesURL) {
                     await UIApplication.shared.open(filesURL)
                     dlog("📂 [RecordingManager] Opened Files app at: \(path)")
                 } else {

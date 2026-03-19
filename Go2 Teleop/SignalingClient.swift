@@ -288,17 +288,23 @@ class SignalingClient: ObservableObject {
             case .success(let message):
                 switch message {
                 case .string(let text):
-                    self.handleMessage(text)
+                    Task { @MainActor in
+                        self.handleMessage(text)
+                    }
                 case .data(let data):
                     if let text = String(data: data, encoding: .utf8) {
-                        self.handleMessage(text)
+                        Task { @MainActor in
+                            self.handleMessage(text)
+                        }
                     }
                 @unknown default:
                     break
                 }
                 
                 // Continue receiving
-                self.receiveMessage()
+                Task { @MainActor in
+                    self.receiveMessage()
+                }
                 
             case .failure(let error):
                 print("[SIGNALING] ❌ Receive error: \(error.localizedDescription)")

@@ -54,8 +54,8 @@ class UVCCameraManager: NSObject, ObservableObject {
     }
     
     // MARK: - Private Properties
-    private let captureSession = AVCaptureSession()
-    private let videoDataOutput = AVCaptureVideoDataOutput()
+    nonisolated(unsafe) private let captureSession = AVCaptureSession()
+    nonisolated(unsafe) private let videoDataOutput = AVCaptureVideoDataOutput()
     private let sessionQueue = DispatchQueue(label: "com.visionproteleop.uvccamera.session")
     private let processingQueue = DispatchQueue(label: "com.visionproteleop.uvccamera.processing", qos: .userInteractive)
     
@@ -90,7 +90,7 @@ class UVCCameraManager: NSObject, ObservableObject {
             
             // If we found devices on init and we're authorized, auto-start
             if !self.availableDevices.isEmpty && self.authorizationStatus == .authorized {
-                if let device = self.selectedDevice, !self.isCapturing {
+                if self.selectedDevice != nil, !self.isCapturing {
                     dlog("📷 [UVCCameraManager] Camera already connected at launch, auto-starting capture")
                     // Short delay for session setup
                     try? await Task.sleep(nanoseconds: 500_000_000) // 500ms

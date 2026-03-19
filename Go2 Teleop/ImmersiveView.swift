@@ -335,7 +335,7 @@ struct ImmersiveView: View {
                         var skyBoxMaterial = UnlitMaterial()
                         var textureOptions = TextureResource.CreateOptions(semantic: .hdrColor)
                         textureOptions.mipmapsMode = .none
-                        let texture = try TextureResource.generate(from: imageRight.cgImage!, options: textureOptions)
+                        let texture = try TextureResource(image: imageRight.cgImage!, withName: nil, options: textureOptions)
                         skyBoxMaterial.color = .init(texture: .init(texture))
                         skyBox.components[ModelComponent.self]?.materials = [skyBoxMaterial]
                         return
@@ -346,12 +346,14 @@ struct ImmersiveView: View {
                     textureOptions.mipmapsMode = .none  // No mipmaps to avoid filtering artifacts
                     
                     // Generate textures directly from CGImages (skip UIImage wrapper overhead)
-                    let leftTexture = try TextureResource.generate(
-                        from: imageLeft.cgImage!,
+                    let leftTexture = try TextureResource(
+                        image: imageLeft.cgImage!,
+                        withName: nil,
                         options: textureOptions
                     )
-                    let rightTexture = try TextureResource.generate(
-                        from: imageRight.cgImage!,
+                    let rightTexture = try TextureResource(
+                        image: imageRight.cgImage!,
+                        withName: nil,
                         options: textureOptions
                     )
                     
@@ -374,8 +376,9 @@ struct ImmersiveView: View {
                     var textureOptions = TextureResource.CreateOptions(semantic: .hdrColor)
                     textureOptions.mipmapsMode = .none  // No mipmaps to avoid filtering artifacts
                     
-                    let texture = try TextureResource.generate(
-                        from: imageRight.cgImage!,
+                    let texture = try TextureResource(
+                        image: imageRight.cgImage!,
+                        withName: nil,
                         options: textureOptions
                     )
                     skyBoxMaterial.color = .init(texture: .init(texture))
@@ -651,7 +654,7 @@ class VideoStreamManager: ObservableObject {
                 }
                 
                 // Handle connection state changes
-                client.onConnectionStateChanged = { [weak self] isConnected in
+                client.onConnectionStateChanged = { isConnected in
                     if !isConnected {
                         dlog("🔴 [VideoStreamManager] WebRTC disconnected")
                         RecordingManager.shared.onVideoSourceDisconnected(reason: "WebRTC disconnected")
@@ -1215,9 +1218,6 @@ extension VideoFrameRenderer {
         let yStride = Int(i420.strideY)
         let uStride = Int(i420.strideU)
         let vStride = Int(i420.strideV)
-        
-        // Use Accelerate framework for hardware-accelerated YUV to ARGB conversion
-        let loopStart = CFAbsoluteTimeGetCurrent()
         
         // Create vImage buffers for the planar YUV data
         var srcYPlane = vImage_Buffer(

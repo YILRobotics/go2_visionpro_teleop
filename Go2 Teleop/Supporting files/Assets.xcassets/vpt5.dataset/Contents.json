@@ -1,10 +1,6 @@
 {
   "data" : [
-    {
-      "filename" : "vpt5.mp4",
-      "idiom" : "universal",
-      "universal-type-identifier" : "public.mpeg-4"
-    }
+
   ],
   "info" : {
     "author" : "xcode",

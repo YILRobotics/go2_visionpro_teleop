@@ -530,7 +530,7 @@ struct CombinedStreamingView: View {
                                     var textureOptions = TextureResource.CreateOptions(semantic: .hdrColor)
                                     textureOptions.mipmapsMode = .none
                                     if let img = finalRightImage {
-                                        let texture = try TextureResource.generate(from: img, options: textureOptions)
+                                        let texture = try TextureResource(image: img, withName: nil, options: textureOptions)
                                         skyBoxMaterial.color = .init(texture: .init(texture))
                                         skyBox.components[ModelComponent.self]?.materials = [skyBoxMaterial]
                                     }
@@ -541,8 +541,8 @@ struct CombinedStreamingView: View {
                                 textureOptions.mipmapsMode = .none
                                 
                                 if let lImg = finalLeftImage, let rImg = finalRightImage {
-                                    let leftTexture = try TextureResource.generate(from: lImg, options: textureOptions)
-                                    let rightTexture = try TextureResource.generate(from: rImg, options: textureOptions)
+                                    let leftTexture = try TextureResource(image: lImg, withName: nil, options: textureOptions)
+                                    let rightTexture = try TextureResource(image: rImg, withName: nil, options: textureOptions)
                                     try stereoMaterial.setParameter(name: "left", value: .textureResource(leftTexture))
                                     try stereoMaterial.setParameter(name: "right", value: .textureResource(rightTexture))
                                     skyBox.components[ModelComponent.self]?.materials = [stereoMaterial]
@@ -556,7 +556,7 @@ struct CombinedStreamingView: View {
                             do {
                                 var textureOptions = TextureResource.CreateOptions(semantic: .hdrColor)
                                 textureOptions.mipmapsMode = .none
-                                let texture = try TextureResource.generate(from: displayImage.cgImage!, options: textureOptions)
+                                let texture = try TextureResource(image: displayImage.cgImage!, withName: nil, options: textureOptions)
                                 skyBoxMaterial.color = .init(texture: .init(texture))
                                 skyBox.components[ModelComponent.self]?.materials = [skyBoxMaterial]
                             } catch {
@@ -569,7 +569,7 @@ struct CombinedStreamingView: View {
                         do {
                             var textureOptions = TextureResource.CreateOptions(semantic: .hdrColor)
                             textureOptions.mipmapsMode = .none
-                            let texture = try TextureResource.generate(from: displayImage.cgImage!, options: textureOptions)
+                            let texture = try TextureResource(image: displayImage.cgImage!, withName: nil, options: textureOptions)
                             skyBoxMaterial.color = .init(texture: .init(texture))
                             skyBox.components[ModelComponent.self]?.materials = [skyBoxMaterial]
                         } catch {
@@ -1475,7 +1475,7 @@ struct CombinedStreamingView: View {
                 if components.count == 2 && components[0].hasPrefix("env_") {
                     // This is a robot root like "env_0/G1" - hide it if it has geometry
                     // The child links will be visible and receive pose updates
-                    if let modelEntity = entity as? ModelEntity, modelEntity.model != nil {
+                    if entity.model != nil {
                         entity.isEnabled = false
                         dlog("🚫 [indexMuJoCoBodyEntities] Hiding robot root with geometry: '\(pathKey)'")
                     }
@@ -2047,7 +2047,7 @@ private func updatePointCloudEntity(
         4,9,5, 2,4,11, 6,2,10, 8,6,7, 9,8,1
     ]
     
-    for (bucket, data) in buckets {
+    for (_, data) in buckets {
         let bucketPoints = data.positions
         if bucketPoints.isEmpty { continue }
         var vertices: [SIMD3<Float>] = []
@@ -2245,7 +2245,7 @@ final class CombinedMuJoCoManager: ObservableObject, MuJoCoManager {
         }
     }
     
-    private func getWiFiAddress() -> String? {
+    nonisolated private func getWiFiAddress() -> String? {
         var address: String?
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
         
@@ -2325,8 +2325,10 @@ struct CombinedMuJoCoARServiceImpl: MujocoAr_MuJoCoARService.SimpleServiceProtoc
                 attachToRotation = simd_quatf(ix: request.attachToRotation.x, iy: request.attachToRotation.y, iz: request.attachToRotation.z, r: request.attachToRotation.w)
             }
             
+            let finalAttachToPosition = attachToPosition
+            let finalAttachToRotation = attachToRotation
             await MainActor.run {
-                manager?.onUsdzReceived?(localURL.absoluteString, attachToPosition, attachToRotation)
+                manager?.onUsdzReceived?(localURL.absoluteString, finalAttachToPosition, finalAttachToRotation)
                 manager?.updateConnectionStatus("Client Connected - USDZ Received")
             }
             
@@ -2379,9 +2381,12 @@ struct CombinedMuJoCoARServiceImpl: MujocoAr_MuJoCoARService.SimpleServiceProtoc
             try chunkData.write(to: localURL)
             dlog("💾 [sendUsdzDataChunked] Saved \(chunkData.count) bytes to: \(localURL.path)")
             
+            let finalAttachToPosition = attachToPosition
+            let finalAttachToRotation = attachToRotation
+            let finalReceivedChunks = receivedChunks
             await MainActor.run {
-                manager?.onUsdzReceived?(localURL.absoluteString, attachToPosition, attachToRotation)
-                manager?.updateConnectionStatus("Client Connected - USDZ Received (\(receivedChunks) chunks)")
+                manager?.onUsdzReceived?(localURL.absoluteString, finalAttachToPosition, finalAttachToRotation)
+                manager?.updateConnectionStatus("Client Connected - USDZ Received (\(finalReceivedChunks) chunks)")
             }
             
             response.success = true
@@ -2406,9 +2411,10 @@ struct CombinedMuJoCoARServiceImpl: MujocoAr_MuJoCoARService.SimpleServiceProtoc
             poses[bodyPose.bodyName] = bodyPose
         }
         
+        let posesSnapshot = poses
         await MainActor.run {
-            manager?.onPosesReceived?(poses)
-            manager?.updateConnectionStatus("Streaming - \(poses.count) Bodies")
+            manager?.onPosesReceived?(posesSnapshot)
+            manager?.updateConnectionStatus("Streaming - \(posesSnapshot.count) Bodies")
         }
         
         var response = MujocoAr_PoseUpdateResponse()
@@ -2431,9 +2437,10 @@ struct CombinedMuJoCoARServiceImpl: MujocoAr_MuJoCoARService.SimpleServiceProtoc
                     poses[bodyPose.bodyName] = bodyPose
                 }
                 
+                let posesSnapshot = poses
                 await MainActor.run {
-                    manager?.onPosesReceived?(poses)
-                    manager?.updateConnectionStatus("Streaming - \(poses.count) Bodies")
+                    manager?.onPosesReceived?(posesSnapshot)
+                    manager?.updateConnectionStatus("Streaming - \(posesSnapshot.count) Bodies")
                 }
                 
                 var responseMsg = MujocoAr_PoseUpdateResponse()
@@ -2541,7 +2548,7 @@ private struct VideoSourceModifiers: ViewModifier {
         
         updateTrigger.toggle()
         
-        guard let left = imageData.left, let right = imageData.right else {
+        guard imageData.left != nil, let right = imageData.right else {
             updateHasFrames(false)
             return
         }
@@ -2701,8 +2708,7 @@ private struct LifecycleModifiers: ViewModifier {
         dlog("🤖 [CombinedStreamingView] Teleoperation Mode - Full WebRTC support")
         
         videoStreamManager.onSimPosesReceived = { timestamp, poses, qpos, ctrl in
-            // Record simulation data on background thread to avoid blocking main thread
-            DispatchQueue.global(qos: .utility).async {
+            Task { @MainActor in
                 RecordingManager.shared.recordSimulationData(
                     timestamp: timestamp,
                     poses: poses,

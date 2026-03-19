@@ -269,55 +269,56 @@ struct StatusOverlay: View {
             
             // Update status periodically
             Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-                let wasPythonConnected = pythonConnected
-                let wasWebrtcConnected = webrtcConnected
-                
-                // Check for Python connection via either local gRPC or remote signaling
-                let localPythonConnected = DataManager.shared.pythonClientIP != nil
-                let remotePythonConnected = signalingClient.peerConnected
-                
-                if localPythonConnected {
-                    pythonConnected = true
-                    pythonIP = DataManager.shared.pythonClientIP ?? "Connected"
-                } else if remotePythonConnected {
-                    pythonConnected = true
-                    pythonIP = "Remote (\(signalingClient.roomCode))"
-                } else {
-                    pythonConnected = false
-                    pythonIP = "Not connected"
-                }
-                
-                // Check for WebRTC connection via either local or remote
-                let localWebrtcConnected = DataManager.shared.webrtcServerInfo != nil
-                webrtcConnected = localWebrtcConnected || remotePythonConnected
-                
-                // Toggle trigger to force MuJoCo status update
-                mujocoStatusUpdateTrigger.toggle()
-                
-                // Detect disconnection and maximize status view
-                if (wasPythonConnected && !pythonConnected) || (wasWebrtcConnected && !webrtcConnected) {
-                    dlog("🔌 [StatusView] Connection lost - maximizing status view")
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                        isMinimized = false
-                        userInteracted = false  // Reset so it can auto-minimize again on next connection
-                        hasFrames = false  // Clear frames flag
+                Task { @MainActor in
+                    let wasPythonConnected = pythonConnected
+                    let wasWebrtcConnected = webrtcConnected
+                    
+                    // Check for Python connection via either local gRPC or remote signaling
+                    let localPythonConnected = DataManager.shared.pythonClientIP != nil
+                    let remotePythonConnected = signalingClient.peerConnected
+                    
+                    if localPythonConnected {
+                        pythonConnected = true
+                        pythonIP = DataManager.shared.pythonClientIP ?? "Connected"
+                    } else if remotePythonConnected {
+                        pythonConnected = true
+                        pythonIP = "Remote (\(signalingClient.roomCode))"
+                    } else {
+                        pythonConnected = false
+                        pythonIP = "Not connected"
                     }
-                }
-                
-                // Detect connection and minimize status view
-                if (!wasPythonConnected && pythonConnected) {
-                     // Only minimize on Python connection if NOT in video mode (hand tracking only)
-                     // In video mode, we wait for frames to arrive (handled in ImmersiveView)
-                     if !showVideoStatus {
-                         dlog("🔌 [StatusView] Connection established - minimizing status view")
-                         if !userInteracted {
-                             withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                                 isMinimized = true
+                    
+                    // Check for WebRTC connection via either local or remote
+                    let localWebrtcConnected = DataManager.shared.webrtcServerInfo != nil
+                    webrtcConnected = localWebrtcConnected || remotePythonConnected
+                    
+                    // Toggle trigger to force MuJoCo status update
+                    mujocoStatusUpdateTrigger.toggle()
+                    
+                    // Detect disconnection and maximize status view
+                    if (wasPythonConnected && !pythonConnected) || (wasWebrtcConnected && !webrtcConnected) {
+                        dlog("🔌 [StatusView] Connection lost - maximizing status view")
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                            isMinimized = false
+                            userInteracted = false  // Reset so it can auto-minimize again on next connection
+                            hasFrames = false  // Clear frames flag
+                        }
+                    }
+                    
+                    // Detect connection and minimize status view
+                    if (!wasPythonConnected && pythonConnected) {
+                         // Only minimize on Python connection if NOT in video mode (hand tracking only)
+                         // In video mode, we wait for frames to arrive (handled in ImmersiveView)
+                         if !showVideoStatus {
+                             dlog("🔌 [StatusView] Connection established - minimizing status view")
+                             if !userInteracted {
+                                 withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                                     isMinimized = true
+                                 }
                              }
                          }
-                     }
+                    }
                 }
-                
             }
         }
     }

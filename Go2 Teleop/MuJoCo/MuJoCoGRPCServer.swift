@@ -128,9 +128,11 @@ struct MuJoCoARServiceImpl: MujocoAr_MuJoCoARService.SimpleServiceProtocol {
             
             dlog("💾 [sendUsdzData] Saved USDZ data to: \(localURL.path)")
             
+            let finalAttachToPosition = attachToPosition
+            let finalAttachToRotation = attachToRotation
             await MainActor.run {
                 dlog("📨 [sendUsdzData] Updating streaming view with local file...")
-                streamingView?.updateUsdzURL(localURL.absoluteString, attachToPosition: attachToPosition, attachToRotation: attachToRotation)
+                streamingView?.updateUsdzURL(localURL.absoluteString, attachToPosition: finalAttachToPosition, attachToRotation: finalAttachToRotation)
                 dlog("📨 [sendUsdzData] Streaming view updated")
             }
             
@@ -160,7 +162,6 @@ struct MuJoCoARServiceImpl: MujocoAr_MuJoCoARService.SimpleServiceProtocol {
         var response = MujocoAr_UsdzDataResponse()
         var chunkData = Data()
         var fileName = ""
-        var sessionID = ""
         var totalExpectedSize: Int64 = 0
         var receivedChunks = 0
         var totalChunks = 0
@@ -174,7 +175,6 @@ struct MuJoCoARServiceImpl: MujocoAr_MuJoCoARService.SimpleServiceProtocol {
                 
                 if receivedChunks == 0 {
                     fileName = chunkRequest.filename
-                    sessionID = chunkRequest.sessionID
                     totalExpectedSize = chunkRequest.totalSize
                     totalChunks = Int(chunkRequest.totalChunks)
                     
@@ -215,9 +215,11 @@ struct MuJoCoARServiceImpl: MujocoAr_MuJoCoARService.SimpleServiceProtocol {
             
             dlog("💾 [sendUsdzDataChunked] Successfully saved complete USDZ file (\(chunkData.count) bytes)")
             
+            let finalAttachToPosition = attachToPosition
+            let finalAttachToRotation = attachToRotation
             await MainActor.run {
                 dlog("📦 [sendUsdzDataChunked] Updating streaming view with assembled file...")
-                streamingView?.updateUsdzURL(localURL.absoluteString, attachToPosition: attachToPosition, attachToRotation: attachToRotation)
+                streamingView?.updateUsdzURL(localURL.absoluteString, attachToPosition: finalAttachToPosition, attachToRotation: finalAttachToRotation)
                 dlog("📦 [sendUsdzDataChunked] Streaming view updated")
             }
             

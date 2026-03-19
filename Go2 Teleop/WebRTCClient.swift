@@ -413,7 +413,11 @@ class WebRTCClient: NSObject, LKRTCPeerConnectionDelegate, @unchecked Sendable {
     
     private func handleRemoteCandidate(_ candidate: LKRTCIceCandidate) {
         dlog("DEBUG: Adding remote ICE candidate")
-        self.peerConnection?.add(candidate)
+        self.peerConnection?.add(candidate) { error in
+            if let error = error {
+                dlog("ERROR: Failed to add remote ICE candidate: \(error)")
+            }
+        }
     }
     
     private func connectToServer(host: String, port: Int) async throws {
@@ -474,7 +478,7 @@ class WebRTCClient: NSObject, LKRTCPeerConnectionDelegate, @unchecked Sendable {
         )
         
         let answerData = try JSONEncoder().encode(answerMessage)
-        var answerString = String(data: answerData, encoding: .utf8)! + "\n"
+        let answerString = String(data: answerData, encoding: .utf8)! + "\n"
         try await outputStream.write(answerString.data(using: .utf8)!)
         
         dlog("DEBUG: Answer sent to server")
@@ -489,14 +493,14 @@ class WebRTCClient: NSObject, LKRTCPeerConnectionDelegate, @unchecked Sendable {
         let interval = handStreamIntervalNanoseconds
         handStreamTask = Task { [weak self] in
             while !Task.isCancelled {
-                guard let _ = self else { return }
+                guard let self else { return }
                 do {
-                    let update = fill_handUpdate()
+                    let update = await MainActor.run { fill_handUpdate() }
                     let payload = try update.serializedData()
                     let buffer = LKRTCDataBuffer(data: payload, isBinary: true)
 
                     let sendResult = await MainActor.run { () -> Bool in
-                        guard let strongChannel = self?.handDataChannel else { return false }
+                        guard let strongChannel = self.handDataChannel else { return false }
                         if strongChannel.readyState != .open {
                             return false
                         }
@@ -669,7 +673,7 @@ class WebRTCClient: NSObject, LKRTCPeerConnectionDelegate, @unchecked Sendable {
             var activePairId: String?
             
             // 1. Find the active transport to get the selected candidate pair ID
-            for (id, stats) in report.statistics {
+            for (_, stats) in report.statistics {
                 if stats.type == "transport" {
                     if let selectedId = stats.values["selectedCandidatePairId"] as? String {
                         activePairId = selectedId
@@ -718,7 +722,6 @@ class WebRTCClient: NSObject, LKRTCPeerConnectionDelegate, @unchecked Sendable {
             
             // Check current status to append/update
             Task { @MainActor in
-                let current = DataManager.shared.connectionStatus
                 // Only update if it contains "Connected" to avoid overwriting transient states
                 // Or if we specifically want to show this info always once connected
                 DataManager.shared.webRTCConnectionType = connectionTypeString
@@ -1671,4 +1674,4 @@ extension OutputStream {
     }
 }
 
-extension LKRTCDataChannel: @unchecked Sendable {}
+extension LKRTCDataChannel: @retroactive @unchecked Sendable {}

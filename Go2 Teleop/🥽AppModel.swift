@@ -602,9 +602,7 @@ extension 🥽AppModel {
     func processReconstructionUpdates() async {
         for await update in sceneReconstruction.anchorUpdates {
             // dlog("reconstruction update")
-            let meshAnchor = update.anchor
-            let mesh_description = meshAnchor.geometry.description
-            // dlog(mesh_description)
+            _ = update.anchor
         }
     }
 
@@ -731,6 +729,7 @@ func startServerLegacy() {
     dlog("⚠️ [DEBUG] Legacy startServer called - grpc-swift-2 requires iOS 18.0+/visionOS 2.0+")
 }
 
+@MainActor
 func fill_handUpdate() -> Handtracking_HandUpdate {
     var handUpdate = Handtracking_HandUpdate()
     
@@ -794,6 +793,7 @@ func fill_handUpdate() -> Handtracking_HandUpdate {
 /// Encodes: pose (4x4), button states, pressures, timestamp
 /// Only available on visionOS 26.0+
 @available(visionOS 26.0, *)
+@MainActor
 func getStylusMatrices() -> [Handtracking_Matrix4x4]? {
     let manager = AccessoryTrackingManager.shared
     let snapshot = manager.snapshot
@@ -845,6 +845,7 @@ func getStylusMatrices() -> [Handtracking_Matrix4x4]? {
 /// Get marker detection matrices to append to the hand update
 /// Returns nil if marker detection is disabled or no images detected
 /// Includes both ArUco markers and custom user images
+@MainActor
 func getMarkerMatrices() -> [Handtracking_Matrix4x4]? {
     let manager = MarkerDetectionManager.shared
     // Use thread-safe snapshot properties for non-MainActor access

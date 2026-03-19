@@ -688,7 +688,6 @@ class AccessoryTrackingManager: ObservableObject {
             child.removeFromParent()
         }
         
-        let fontSize: CGFloat = 0.012
         let lineSpacing: Float = 0.018
         
         // Create TIP line (pressure button)

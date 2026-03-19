@@ -137,7 +137,8 @@ struct HandTrackingServiceImpl: Handtracking_HandTrackingService.SimpleServicePr
             }
             
             // Send one response and return for info-only connections
-            try await response.write(fill_handUpdate())
+            let initialUpdate = await MainActor.run { fill_handUpdate() }
+            try await response.write(initialUpdate)
             return
         } else {
             dlog("⚠️ [DEBUG] Not a special message (expected m00=888.0 or 999.0, got \(request.head.m00))")
@@ -188,7 +189,7 @@ struct HandTrackingServiceImpl: Handtracking_HandTrackingService.SimpleServicePr
         
         // Stream hand tracking data until cancelled
         while !Task.isCancelled {
-            let handUpdate = fill_handUpdate()
+            let handUpdate = await MainActor.run { fill_handUpdate() }
             updateCount += 1
             
 //            if updateCount == 1 || updateCount % 100 == 0 {

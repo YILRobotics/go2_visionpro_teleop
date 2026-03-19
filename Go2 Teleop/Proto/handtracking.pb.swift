@@ -170,24 +170,9 @@ fileprivate let _protobuf_package = "handtracking"
 
 extension Handtracking_Matrix4x4: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Matrix4x4"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "m00"),
-    2: .same(proto: "m01"),
-    3: .same(proto: "m02"),
-    4: .same(proto: "m03"),
-    5: .same(proto: "m10"),
-    6: .same(proto: "m11"),
-    7: .same(proto: "m12"),
-    8: .same(proto: "m13"),
-    9: .same(proto: "m20"),
-    10: .same(proto: "m21"),
-    11: .same(proto: "m22"),
-    12: .same(proto: "m23"),
-    13: .same(proto: "m30"),
-    14: .same(proto: "m31"),
-    15: .same(proto: "m32"),
-    16: .same(proto: "m33"),
-  ]
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = .init(
+    bytecode: "\0\u{1}m00\0\u{1}m01\0\u{1}m02\0\u{1}m03\0\u{1}m10\0\u{1}m11\0\u{1}m12\0\u{1}m13\0\u{1}m20\0\u{1}m21\0\u{1}m22\0\u{1}m23\0\u{1}m30\0\u{1}m31\0\u{1}m32\0\u{1}m33\0"
+  )
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -289,9 +274,9 @@ extension Handtracking_Matrix4x4: SwiftProtobuf.Message, SwiftProtobuf._MessageI
 
 extension Handtracking_Skeleton: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Skeleton"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "jointMatrices"),
-  ]
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = .init(
+    bytecode: "\0\u{1}jointMatrices\0"
+  )
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -318,10 +303,9 @@ extension Handtracking_Skeleton: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
 
 extension Handtracking_Hand: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Hand"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "wristMatrix"),
-    2: .same(proto: "skeleton"),
-  ]
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = .init(
+    bytecode: "\0\u{1}wristMatrix\0\u{1}skeleton\0"
+  )
 
   fileprivate class _StorageClass {
     var _wristMatrix: Handtracking_Matrix4x4? = nil
@@ -387,11 +371,9 @@ extension Handtracking_Hand: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
 
 extension Handtracking_HandUpdate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".HandUpdate"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .standard(proto: "left_hand"),
-    2: .standard(proto: "right_hand"),
-    3: .same(proto: "Head"),
-  ]
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = .init(
+    bytecode: "\0\u{3}left_hand\0\u{3}right_hand\0\u{1}Head\0"
+  )
 
   fileprivate class _StorageClass {
     var _leftHand: Handtracking_Hand? = nil
@@ -464,9 +446,9 @@ extension Handtracking_HandUpdate: SwiftProtobuf.Message, SwiftProtobuf._Message
 
 extension Handtracking_HandUpdateAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".HandUpdateAck"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "message"),
-  ]
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = .init(
+    bytecode: "\0\u{1}message\0"
+  )
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
