@@ -362,7 +362,6 @@ class DataManager: ObservableObject {
     @Published var videoPlaneZDistance: Float {
         didSet {
             UserDefaults.standard.set(videoPlaneZDistance, forKey: "videoPlaneZDistance")
-            syncSettingToiCloud("visionos.videoPlaneZDistance", value: Double(videoPlaneZDistance))
         }
     }
     
@@ -370,7 +369,6 @@ class DataManager: ObservableObject {
     @Published var videoPlaneYPosition: Float {
         didSet {
             UserDefaults.standard.set(videoPlaneYPosition, forKey: "videoPlaneYPosition")
-            syncSettingToiCloud("visionos.videoPlaneYPosition", value: Double(videoPlaneYPosition))
         }
     }
     
@@ -391,14 +389,12 @@ class DataManager: ObservableObject {
     @Published var statusMinimizedXPosition: Float {
         didSet {
             UserDefaults.standard.set(statusMinimizedXPosition, forKey: "statusMinimizedXPosition")
-            syncSettingToiCloud("visionos.statusMinimizedXPosition", value: Double(statusMinimizedXPosition))
         }
     }
     
     @Published var statusMinimizedYPosition: Float {
         didSet {
             UserDefaults.standard.set(statusMinimizedYPosition, forKey: "statusMinimizedYPosition")
-            syncSettingToiCloud("visionos.statusMinimizedYPosition", value: Double(statusMinimizedYPosition))
         }
     }
     
@@ -406,7 +402,6 @@ class DataManager: ObservableObject {
     @Published var upperLimbVisible: Bool {
         didSet {
             UserDefaults.standard.set(upperLimbVisible, forKey: "upperLimbVisible")
-            syncSettingToiCloud("visionos.upperLimbVisible", value: upperLimbVisible)
         }
     }
     
@@ -414,7 +409,6 @@ class DataManager: ObservableObject {
     @Published var showHeadBeam: Bool {
         didSet {
             UserDefaults.standard.set(showHeadBeam, forKey: "showHeadBeam")
-            syncSettingToiCloud("visionos.showHeadBeam", value: showHeadBeam)
         }
     }
     
@@ -422,7 +416,6 @@ class DataManager: ObservableObject {
     @Published var showHandJoints: Bool {
         didSet {
             UserDefaults.standard.set(showHandJoints, forKey: "showHandJoints")
-            syncSettingToiCloud("visionos.showHandJoints", value: showHandJoints)
         }
     }
     
@@ -430,7 +423,6 @@ class DataManager: ObservableObject {
     @Published var handJointsOpacity: Float {
         didSet {
             UserDefaults.standard.set(handJointsOpacity, forKey: "handJointsOpacity")
-            syncSettingToiCloud("visionos.handJointsOpacity", value: Double(handJointsOpacity))
         }
     }
     
@@ -440,7 +432,6 @@ class DataManager: ObservableObject {
     @Published var handPredictionOffset: Float {
         didSet {
             UserDefaults.standard.set(handPredictionOffset, forKey: "handPredictionOffset")
-            syncSettingToiCloud("visionos.handPredictionOffset", value: Double(handPredictionOffset))
         }
     }
     
@@ -448,7 +439,6 @@ class DataManager: ObservableObject {
     @Published var videoPlaneScale: Float {
         didSet {
             UserDefaults.standard.set(videoPlaneScale, forKey: "videoPlaneScale")
-            syncSettingToiCloud("visionos.videoPlaneScale", value: Double(videoPlaneScale))
         }
     }
     
@@ -457,7 +447,6 @@ class DataManager: ObservableObject {
     @Published var stereoBaselineOffset: Float {
         didSet {
             UserDefaults.standard.set(stereoBaselineOffset, forKey: "stereoBaselineOffset")
-            syncSettingToiCloud("visionos.stereoBaselineOffset", value: Double(stereoBaselineOffset))
         }
     }
     
@@ -476,15 +465,6 @@ class DataManager: ObservableObject {
     @Published var pythonCalibrationMarkerDetected: Bool = false
     @Published var pythonCalibrationProgress: Float = 0.0
     @Published var pythonCalibrationStepStatus: Int = 0  // 0=collecting, 1=calibrating, 2=complete
-    
-    // MARK: - iCloud Sync Helper
-    
-    private func syncSettingToiCloud<T>(_ key: String, value: T) {
-        let store = NSUbiquitousKeyValueStore.default
-        store.set(value, forKey: key)
-        store.set(Date().timeIntervalSince1970, forKey: "visionos.lastSyncTime")
-        store.synchronize()
-    }
     
     private init() {
         // Load saved video source or default to network

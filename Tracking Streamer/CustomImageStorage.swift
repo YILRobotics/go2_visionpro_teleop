@@ -31,7 +31,7 @@ struct CustomImageRegistration: Identifiable, Codable {
 
 /// Manages persistence of custom tracked images
 /// Images are stored in Documents/TrackedImages/
-/// Metadata is stored in Documents/custom_images.json and synced via iCloud
+/// Metadata is stored in Documents/custom_images.json
 @MainActor
 class CustomImageStorage: ObservableObject {
     static let shared = CustomImageStorage()
@@ -45,9 +45,6 @@ class CustomImageStorage: ObservableObject {
     /// JSON file for metadata
     private let metadataFile: URL
     
-    /// iCloud key for syncing
-    private let iCloudKey = "customImageRegistrations"
-    
     private init() {
         // Setup directories
         let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -59,15 +56,6 @@ class CustomImageStorage: ObservableObject {
         
         // Load existing registrations
         loadRegistrations()
-        
-        // Listen for iCloud changes
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(iCloudDidChange),
-            name: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
-            object: NSUbiquitousKeyValueStore.default
-        )
-        NSUbiquitousKeyValueStore.default.synchronize()
         
         dlog("📷 [CustomImageStorage] Initialized with \(registrations.count) registered images")
     }
@@ -186,47 +174,17 @@ class CustomImageStorage: ObservableObject {
     // MARK: - Private Methods
     
     private func loadRegistrations() {
-        // Try loading from local file first
         if let data = try? Data(contentsOf: metadataFile),
            let decoded = try? JSONDecoder().decode([CustomImageRegistration].self, from: data) {
             registrations = decoded
             dlog("📷 [CustomImageStorage] Loaded \(decoded.count) registrations from disk")
         }
-        
-        // Check iCloud for newer data
-        if let iCloudData = NSUbiquitousKeyValueStore.default.data(forKey: iCloudKey),
-           let iCloudRegistrations = try? JSONDecoder().decode([CustomImageRegistration].self, from: iCloudData) {
-            // Use iCloud data if it has more registrations (simple merge strategy)
-            if iCloudRegistrations.count > registrations.count {
-                registrations = iCloudRegistrations
-                dlog("☁️ [CustomImageStorage] Using iCloud registrations (\(iCloudRegistrations.count) items)")
-            }
-        }
     }
     
     private func saveRegistrations() {
-        // Save to local file
         if let data = try? JSONEncoder().encode(registrations) {
             try? data.write(to: metadataFile)
-            
-            // Sync to iCloud
-            NSUbiquitousKeyValueStore.default.set(data, forKey: iCloudKey)
-            NSUbiquitousKeyValueStore.default.synchronize()
         }
-    }
-    
-    @objc private func iCloudDidChange(_ notification: Notification) {
-        guard let userInfo = notification.userInfo,
-              let changedKeys = userInfo[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String],
-              changedKeys.contains(iCloudKey) else {
-            return
-        }
-        
-        dlog("☁️ [CustomImageStorage] iCloud data changed, reloading...")
-        loadRegistrations()
-        
-        // Notify marker detection
-        NotificationCenter.default.post(name: .customImagesDidChange, object: nil)
     }
 }
 

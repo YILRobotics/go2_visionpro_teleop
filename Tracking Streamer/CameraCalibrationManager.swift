@@ -288,48 +288,8 @@ class CameraCalibrationManager: ObservableObject {
             let data = try encoder.encode(allCalibrations)
             UserDefaults.standard.set(data, forKey: storageKey)
             dlog("📷 [CameraCalibrationManager] Saved \(allCalibrations.count) calibration(s)")
-            
-            // Also sync to iCloud for iPhone app
-            syncToiCloud()
         } catch {
             dlog("❌ [CameraCalibrationManager] Failed to save calibrations: \(error)")
-        }
-    }
-    
-    // MARK: - iCloud Sync for iPhone App
-    
-    /// iCloud KVS key for intrinsic calibration results
-    private static let iCloudIntrinsicResultsKey = "intrinsicCalibrationResults"
-    
-    /// Sync all intrinsic calibrations to iCloud KVS for the iPhone app to display
-    private func syncToiCloud() {
-        var results: [[String: Any]] = []
-        
-        for calibration in allCalibrations.values {
-            let result: [String: Any] = [
-                "cameraDeviceId": calibration.deviceId,
-                "cameraDeviceName": calibration.deviceName,
-                "isStereo": calibration.isStereo,
-                "fx": calibration.leftIntrinsics.fx,
-                "fy": calibration.leftIntrinsics.fy,
-                "cx": calibration.leftIntrinsics.cx,
-                "cy": calibration.leftIntrinsics.cy,
-                "distortionCoeffs": calibration.leftIntrinsics.distortionCoeffs,
-                "reprojectionError": calibration.leftIntrinsics.reprojectionError,
-                "imageWidth": calibration.leftIntrinsics.imageWidth,
-                "imageHeight": calibration.leftIntrinsics.imageHeight,
-                "calibrationDate": calibration.calibrationDate.timeIntervalSince1970
-            ]
-            results.append(result)
-        }
-        
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: results, options: [])
-            NSUbiquitousKeyValueStore.default.set(jsonData, forKey: Self.iCloudIntrinsicResultsKey)
-            NSUbiquitousKeyValueStore.default.synchronize()
-            dlog("☁️ [CameraCalibrationManager] Synced \(results.count) calibration(s) to iCloud")
-        } catch {
-            dlog("❌ [CameraCalibrationManager] Failed to sync to iCloud: \(error)")
         }
     }
     

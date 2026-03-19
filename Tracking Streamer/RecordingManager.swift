@@ -1,6 +1,5 @@
 import SwiftUI
 import Foundation
-import Combine
 import simd
 import UniformTypeIdentifiers
 import AVFoundation
@@ -209,23 +208,16 @@ struct DeviceInfo: Codable {
     let appVersion: String
 }
 
-/// Storage location options - simplified to Local vs Cloud
+/// Storage location options - local only
 enum RecordingStorageLocation: String, CaseIterable {
     case local = "Local"
-    case cloud = "Cloud"
     
     var icon: String {
-        switch self {
-        case .local: return "internaldrive"
-        case .cloud: return "icloud"
-        }
+        "internaldrive"
     }
     
     var description: String {
-        switch self {
-        case .local: return "Documents folder (Files app)"
-        case .cloud: return "Synced via cloud provider"
-        }
+        "Documents folder (Files app)"
     }
 }
 
@@ -258,14 +250,6 @@ class RecordingManager: ObservableObject {
     @Published var lastRecordingURL: URL? = nil
     @Published var recordingError: String? = nil
     @Published var isSaving: Bool = false
-    
-    // Cloud storage (synced from iOS companion app)
-    @Published var cloudProvider: CloudStorageProvider = .iCloudDrive
-    @Published var isUploadingToCloud: Bool = false
-    @Published var cloudUploadProgress: String = ""
-    @Published var cloudUploadCurrentFile: Int = 0
-    @Published var cloudUploadTotalFiles: Int = 0
-    @Published var cloudUploadCurrentFileName: String = ""  // Current file being uploaded
     
     // Auto-recording state
     @Published var autoRecordingEnabled: Bool {
@@ -309,9 +293,6 @@ class RecordingManager: ObservableObject {
     nonisolated(unsafe) private var recordingFolderURL: URL?
     nonisolated(unsafe) private var lastPresentationTime: CMTime?
     
-    // Notification observers
-    private var cancellables = Set<AnyCancellable>()
-    
     // MARK: - Initialization
     
     private init() {
@@ -326,30 +307,6 @@ class RecordingManager: ObservableObject {
         // Load auto-recording preference (default to true for auto-record by default)
         self.autoRecordingEnabled = UserDefaults.standard.object(forKey: "autoRecordingEnabled") as? Bool ?? false
         
-        // Load cloud provider from keychain (synced from iOS)
-        loadCloudSettings()
-        
-        // Observe cloud settings changes
-        setupCloudSettingsObserver()
-    }
-    
-    /// Setup observer for cloud settings changes (from iCloud Keychain sync)
-    private func setupCloudSettingsObserver() {
-        NotificationCenter.default.publisher(for: .cloudStorageSettingsDidChange)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                Task { @MainActor in
-                    self?.loadCloudSettings()
-                }
-            }
-            .store(in: &cancellables)
-    }
-    
-    /// Load cloud storage settings from iCloud Keychain (set by iOS companion app)
-    func loadCloudSettings() {
-        CloudStorageSettings.shared.loadSettings()
-        cloudProvider = CloudStorageSettings.shared.getActiveProvider()
-        // dlog("☁️ [RecordingManager] Cloud provider: \(cloudProvider.displayName)")
     }
     
     // MARK: - Auto-Recording Control
@@ -1168,10 +1125,6 @@ class RecordingManager: ObservableObject {
             
             dlog("✅ [RecordingManager] Recording saved successfully to: \(recordingFolder.path)")
             
-            dlog("☁️ [RecordingManager] Calling uploadToCloudIfNeeded...")
-            // Upload to cloud storage if configured
-            await uploadToCloudIfNeeded(recordingFolder: recordingFolder)
-            
             // Clear memory
             recordedFrames.removeAll()
             videoFrames.removeAll()
@@ -1205,17 +1158,6 @@ class RecordingManager: ObservableObject {
                 throw RecordingError.storageNotAvailable
             }
             return url.appendingPathComponent("Recordings")
-            
-        case .cloud:
-            // Use iCloud Drive container for cloud sync
-            guard let containerURL = fileManager.url(forUbiquityContainerIdentifier: nil) else {
-                dlog("⚠️ [RecordingManager] iCloud not available, falling back to Documents...")
-                guard let url = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
-                    throw RecordingError.storageNotAvailable
-                }
-                return url.appendingPathComponent("Recordings")
-            }
-            return containerURL.appendingPathComponent("Documents").appendingPathComponent("VisionProTeleop")
         }
     }
     
@@ -1229,17 +1171,6 @@ class RecordingManager: ObservableObject {
                 throw RecordingError.storageNotAvailable
             }
             return url.appendingPathComponent("Recordings")
-            
-        case .cloud:
-            // Use the app's iCloud container - syncs to cloud
-            guard let containerURL = fileManager.url(forUbiquityContainerIdentifier: nil) else {
-                dlog("⚠️ [RecordingManager] iCloud not available, falling back to Documents...")
-                guard let url = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
-                    throw RecordingError.storageNotAvailable
-                }
-                return url.appendingPathComponent("Recordings")
-            }
-            return containerURL.appendingPathComponent("Documents").appendingPathComponent("VisionProTeleop")
         }
     }
     
@@ -1294,130 +1225,7 @@ class RecordingManager: ObservableObject {
     
     /// Get a user-friendly description of where recordings are stored
     func getStorageDescription() -> String {
-        switch storageLocation {
-        case .local:
-            return "On My Vision Pro → Tracking Streamer → Recordings"
-        case .cloud:
-            return "\(cloudProvider.displayName) → VisionProTeleop"
-        }
-    }
-    
-    /// Get a description of the cloud provider setting
-    func getCloudProviderDescription() -> String {
-        // Refresh cloud settings
-        loadCloudSettings()
-        
-        switch cloudProvider {
-        case .iCloudDrive:
-            return "iCloud Drive (default)"
-        case .dropbox:
-            if DropboxUploader.shared.isAvailable() {
-                return "Dropbox (configured via iOS)"
-            } else {
-                return "Dropbox (sign in on iOS app)"
-            }
-        case .googleDrive:
-            if GoogleDriveUploader.shared.isAvailable() {
-                return "Google Drive (configured via iOS)"
-            } else {
-                return "Google Drive (sign in on iOS app)"
-            }
-        }
-    }
-    
-    // MARK: - Cloud Upload
-    
-    /// Upload recording to cloud storage if configured (Dropbox or Google Drive)
-    /// iCloud Drive uploads happen automatically via the file system
-    private func uploadToCloudIfNeeded(recordingFolder: URL) async {
-        // Refresh cloud settings in case they changed
-        loadCloudSettings()
-        
-        dlog("☁️ [RecordingManager] Upload requested. Provider: \(cloudProvider.displayName)")
-        
-        // iCloud Drive doesn't need manual upload - files are in the iCloud container
-        guard cloudProvider == .dropbox || cloudProvider == .googleDrive else {
-            dlog("☁️ [RecordingManager] Using iCloud Drive (or none) - no manual upload needed")
-            return
-        }
-        
-        let recordingName = recordingFolder.lastPathComponent
-        
-        // Progress callback to update UI (now includes current filename)
-        let progressCallback: (Int, Int, String) -> Void = { [weak self] current, total, currentFileName in
-            Task { @MainActor in
-                self?.cloudUploadCurrentFile = current
-                self?.cloudUploadTotalFiles = total
-                self?.cloudUploadCurrentFileName = currentFileName
-                if let provider = self?.cloudProvider {
-                    self?.cloudUploadProgress = "Uploading to \(provider.displayName)... (\(current)/\(total))"
-                }
-            }
-        }
-        
-        if cloudProvider == .dropbox {
-            // Check if Dropbox is available
-            guard DropboxUploader.shared.isAvailable() else {
-                dlog("⚠️ [RecordingManager] Dropbox selected but not configured - sign in via iOS app")
-                return
-            }
-            
-            isUploadingToCloud = true
-            cloudUploadCurrentFile = 0
-            cloudUploadTotalFiles = 0
-            cloudUploadCurrentFileName = ""
-            cloudUploadProgress = "Preparing upload to Dropbox..."
-            
-            dlog("☁️ [RecordingManager] Uploading to Dropbox...")
-            
-            let success = await DropboxUploader.shared.uploadRecording(
-                folderURL: recordingFolder,
-                recordingName: recordingName,
-                progressCallback: progressCallback
-            )
-            
-            isUploadingToCloud = false
-            cloudUploadCurrentFileName = ""
-            
-            if success {
-                cloudUploadProgress = "Uploaded to Dropbox ✓"
-                dlog("✅ [RecordingManager] Successfully uploaded to Dropbox")
-            } else {
-                cloudUploadProgress = "Dropbox upload failed"
-                dlog("❌ [RecordingManager] Failed to upload to Dropbox")
-            }
-        } else if cloudProvider == .googleDrive {
-            // Check if Google Drive is available
-            guard GoogleDriveUploader.shared.isAvailable() else {
-                dlog("⚠️ [RecordingManager] Google Drive selected but not configured - sign in via iOS app")
-                return
-            }
-            
-            isUploadingToCloud = true
-            cloudUploadCurrentFile = 0
-            cloudUploadTotalFiles = 0
-            cloudUploadCurrentFileName = ""
-            cloudUploadProgress = "Preparing upload to Google Drive..."
-            
-            dlog("☁️ [RecordingManager] Uploading to Google Drive...")
-            
-            let success = await GoogleDriveUploader.shared.uploadRecording(
-                folderURL: recordingFolder,
-                recordingName: recordingName,
-                progressCallback: progressCallback
-            )
-            
-            isUploadingToCloud = false
-            cloudUploadCurrentFileName = ""
-            
-            if success {
-                cloudUploadProgress = "Uploaded to Google Drive ✓"
-                dlog("✅ [RecordingManager] Successfully uploaded to Google Drive")
-            } else {
-                cloudUploadProgress = "Google Drive upload failed"
-                dlog("❌ [RecordingManager] Failed to upload to Google Drive")
-            }
-        }
+        return "On My Vision Pro → Tracking Streamer → Recordings"
     }
 }
 

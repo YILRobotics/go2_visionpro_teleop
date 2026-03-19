@@ -442,8 +442,6 @@ class ExtrinsicCalibrationManager: ObservableObject {
             UserDefaults.standard.set(data, forKey: storageKey)
             dlog("📐 [ExtrinsicCalibrationManager] Saved \(allCalibrations.count) calibration(s)")
             
-            // Also sync to iCloud for iPhone app
-            syncToiCloud()
         } catch {
             dlog("❌ [ExtrinsicCalibrationManager] Failed to save calibrations: \(error)")
         }
@@ -2110,37 +2108,4 @@ class ExtrinsicCalibrationManager: ObservableObject {
         return idx >= 0 && idx < names.count ? names[idx] : "UNKNOWN"
     }
     
-    // MARK: - iCloud Sync for iPhone App
-    
-    /// iCloud KVS key for extrinsic calibration results
-    private static let iCloudExtrinsicResultsKey = "extrinsicCalibrationResults"
-    
-    /// Sync all extrinsic calibrations to iCloud KVS for the iPhone app to display
-    private func syncToiCloud() {
-        // Convert all calibrations to a format compatible with iPhone app
-        var results: [[String: Any]] = []
-        
-        for calibration in allCalibrations.values {
-            let result: [String: Any] = [
-                "cameraDeviceId": calibration.cameraDeviceId,
-                "cameraDeviceName": calibration.cameraDeviceName,
-                "isStereo": calibration.isStereo,
-                "headToCamera": calibration.leftHeadToCamera,
-                "reprojectionError": calibration.leftReprojectionError,
-                "sampleCount": calibration.leftSampleCount + (calibration.rightSampleCount ?? 0),
-                "calibrationDate": calibration.calibrationDate.timeIntervalSince1970
-            ]
-            results.append(result)
-        }
-        
-        // Encode and save to iCloud KVS
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: results, options: [])
-            NSUbiquitousKeyValueStore.default.set(jsonData, forKey: Self.iCloudExtrinsicResultsKey)
-            NSUbiquitousKeyValueStore.default.synchronize()
-            dlog("☁️ [ExtrinsicCalibrationManager] Synced \(results.count) calibration(s) to iCloud")
-        } catch {
-            dlog("❌ [ExtrinsicCalibrationManager] Failed to sync to iCloud: \(error)")
-        }
-    }
 }

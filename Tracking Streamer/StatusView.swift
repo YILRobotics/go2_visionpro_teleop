@@ -53,7 +53,6 @@ enum ExpandedPanel: Equatable {
     case recording
     case statusPosition
     case cameraCalibration  // Unified camera calibration
-    case cloudStorageDebug
     case visualizations  // Hand/head visualization toggles
     case positionLayout  // Combined video view + controller position
     case handTracking  // Hand tracking configuration (prediction, etc.)
@@ -110,7 +109,6 @@ struct StatusOverlay: View {
 
     @ObservedObject private var calibrationManager = CameraCalibrationManager.shared
     @ObservedObject private var extrinsicCalibrationManager = ExtrinsicCalibrationManager.shared
-    @ObservedObject private var cloudStorageSettings = CloudStorageSettings.shared
     @ObservedObject private var signalingClient = SignalingClient.shared
     
     // App mode persistence
@@ -236,20 +234,12 @@ struct StatusOverlay: View {
                 mujocoStatusUpdateTrigger.toggle()
                 
                 // Detect disconnection and maximize status view
-                // But don't maximize if we're currently uploading to cloud - wait for upload to complete
                 if (wasPythonConnected && !pythonConnected) || (wasWebrtcConnected && !webrtcConnected) {
-                    if recordingManager.isUploadingToCloud {
-                        dlog("🔌 [StatusView] Connection lost but upload in progress - staying minimized")
-                        // Just reset flags, don't maximize yet
-                        userInteracted = false
-                        hasFrames = false
-                    } else {
-                        dlog("🔌 [StatusView] Connection lost - maximizing status view")
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                            isMinimized = false
-                            userInteracted = false  // Reset so it can auto-minimize again on next connection
-                            hasFrames = false  // Clear frames flag
-                        }
+                    dlog("🔌 [StatusView] Connection lost - maximizing status view")
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                        isMinimized = false
+                        userInteracted = false  // Reset so it can auto-minimize again on next connection
+                        hasFrames = false  // Clear frames flag
                     }
                 }
                 
@@ -267,19 +257,6 @@ struct StatusOverlay: View {
                      }
                 }
                 
-                // Check if upload just finished and we should maximize (deferred maximize after upload)
-                // If no Python connected, not uploading, and still minimized without user interaction
-                if !pythonConnected && !recordingManager.isUploadingToCloud && isMinimized && !userInteracted {
-                    // Additional check: only maximize if we were waiting for upload to finish
-                    // This is triggered periodically, so we need to detect the transition
-                    // We rely on the fact that hasFrames was set to false when connection was lost
-                    if !hasFrames {
-                        dlog("☁️ [StatusView] Upload completed and no connection - maximizing status view")
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                            isMinimized = false
-                        }
-                    }
-                }
             }
         }
     }
@@ -314,72 +291,6 @@ struct StatusOverlay: View {
                 .padding(.vertical, 8)
                 .background(Color.black.opacity(0.8))
                 .cornerRadius(20)
-            }
-            
-            // Cloud upload progress indicator (show above buttons when uploading)
-            if recordingManager.isUploadingToCloud {
-                VStack(spacing: 6) {
-                    // Destination header
-                    HStack(spacing: 6) {
-                        Image(systemName: recordingManager.cloudProvider.icon)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(recordingManager.cloudProvider.color)
-                        
-                        Text("Uploading to \(recordingManager.cloudProvider.displayName)")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.white)
-                        
-                        // Spinning indicator
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: recordingManager.cloudProvider.color))
-                            .scaleEffect(0.7)
-                    }
-                    
-                    // Current file being uploaded
-                    if !recordingManager.cloudUploadCurrentFileName.isEmpty {
-                        Text(recordingManager.cloudUploadCurrentFileName)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.7))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    
-                    let progress = recordingManager.cloudUploadTotalFiles > 0 
-                        ? Double(recordingManager.cloudUploadCurrentFile) / Double(recordingManager.cloudUploadTotalFiles) 
-                        : 0.0
-                    
-                    // Progress bar with percentage
-                    HStack(spacing: 8) {
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.white.opacity(0.2))
-                                .frame(width: 120, height: 8)
-                            
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(recordingManager.cloudProvider.color)
-                                .frame(width: 120 * progress, height: 8)
-                                .animation(.easeInOut(duration: 0.3), value: progress)
-                        }
-                        
-                        Text("\(recordingManager.cloudUploadCurrentFile)/\(recordingManager.cloudUploadTotalFiles)")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                        
-                        Text("(\(Int(progress * 100))%)")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(recordingManager.cloudProvider.color.opacity(0.25))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(recordingManager.cloudProvider.color.opacity(0.5), lineWidth: 1)
-                        )
-                )
             }
             
             // USDZ transfer progress indicator (show above buttons when transferring)
@@ -447,18 +358,8 @@ struct StatusOverlay: View {
             
             HStack(spacing: 16) {
                 if showLocalExitConfirmation {
-                    // Confirmation mode with upload warning
+                    // Confirmation mode
                     VStack(spacing: 8) {
-                        if recordingManager.isUploadingToCloud {
-                            HStack(spacing: 4) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.orange)
-                                Text("Upload in progress!")
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
-                            }
-                        }
                         Text("Exit?")
                             .font(.headline)
                             .foregroundColor(.white)
@@ -642,17 +543,10 @@ struct StatusOverlay: View {
             
             // Storage location indicator (minimal line below buttons)
             HStack(spacing: 4) {
-                if recordingManager.storageLocation == .cloud {
-                    Image(systemName: recordingManager.cloudProvider.icon)
-                        .font(.system(size: 10))
-                    Text(recordingManager.cloudProvider.displayName)
-                        .font(.system(size: 10))
-                } else {
-                    Image(systemName: "internaldrive")
-                        .font(.system(size: 10))
-                    Text("Local")
-                        .font(.system(size: 10))
-                }
+                Image(systemName: "internaldrive")
+                    .font(.system(size: 10))
+                Text("Local")
+                    .font(.system(size: 10))
             }
             .foregroundColor(.white.opacity(0.5))
         }
@@ -1336,28 +1230,6 @@ struct StatusOverlay: View {
                                 .font(.headline)
                                 .foregroundColor(.white)
                             
-                            // Upload in progress warning
-                            if recordingManager.isUploadingToCloud {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.orange)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Upload in Progress")
-                                            .font(.subheadline)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.orange)
-                                        Text("\(recordingManager.cloudUploadCurrentFile)/\(recordingManager.cloudUploadTotalFiles) files uploading to \(recordingManager.cloudProvider.displayName)")
-                                            .font(.caption)
-                                            .foregroundColor(.white.opacity(0.7))
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .background(Color.orange.opacity(0.2))
-                                .cornerRadius(10)
-                            }
-                            
                             HStack(spacing: 20) {
                                 Button {
                                     withAnimation {
@@ -1378,7 +1250,7 @@ struct StatusOverlay: View {
                                     dlog("❌ [StatusView] Exiting app now")
                                     exit(0)
                                 } label: {
-                                    Text(recordingManager.isUploadingToCloud ? "Exit Anyway" : "Exit")
+                                    Text("Exit")
                                         .fontWeight(.bold)
                                         .foregroundColor(.white)
                                         .padding(.horizontal, 20)
@@ -1510,22 +1382,11 @@ struct StatusOverlay: View {
                 let hasIntrinsic = uvcCameraManager.selectedDevice.map { calibrationManager.hasCalibration(for: $0.id) } ?? false
                 let hasExtrinsic = uvcCameraManager.selectedDevice.map { extrinsicCalibrationManager.hasCalibration(for: $0.id) } ?? false
                 let isCalibrated = hasIntrinsic && hasExtrinsic
-                
-                // Cloud storage configured check (only for non-iCloud providers)
-                let isCloudConfigured: Bool = {
-                    if recordingManager.storageLocation == .local { return true }
-                    switch recordingManager.cloudProvider {
-                    case .iCloudDrive: return true
-                    case .dropbox: return cloudStorageSettings.isDropboxAvailable
-                    case .googleDrive: return cloudStorageSettings.isGoogleDriveAvailable
-                    }
-                }()
-                
-                let canRecord = isCalibrated && isCloudConfigured && uvcCameraManager.selectedDevice != nil
+                let canRecord = isCalibrated && uvcCameraManager.selectedDevice != nil
                 
                 // Allow recording without full requirements (hand-tracking only mode)
                 // Users can always record hand tracking data, even without camera or calibration
-                let canRecordHandTrackingOnly = isCloudConfigured
+                let canRecordHandTrackingOnly = true
                 
                 // Requirement indicators (warnings, not blockers)
                 if !canRecord {
@@ -1540,55 +1401,6 @@ struct StatusOverlay: View {
                                     .foregroundColor(.orange)
                             }
                             .opacity(flashingOpacity)
-                        }
-                        if !isCloudConfigured {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "icloud.slash.fill")
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
-                                    Text("\(recordingManager.cloudProvider.displayName) not configured")
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
-                                }
-                                .opacity(flashingOpacity)
-                                
-                                // Show Google Drive sign-in button if Google Drive is selected
-                                if recordingManager.cloudProvider == .googleDrive {
-                                    Button {
-                                        // Minimize status view so OAuth window is visible
-                                        // Set directly first, then animate
-                                        expandedPanel = .none
-                                        isMinimized = true
-                                        userInteracted = true
-                                        
-                                        Task {
-                                            // Delay to let UI update and minimize
-                                            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-                                            await GoogleDriveAuthManager.shared.startOAuthFlow()
-                                            // Restore after OAuth completes
-                                            await MainActor.run {
-                                                isMinimized = false
-                                            }
-                                        }
-                                    } label: {
-                                        HStack(spacing: 6) {
-                                            Image(systemName: "person.crop.circle.badge.plus")
-                                                .font(.caption)
-                                            Text("Sign in to Google Drive")
-                                                .font(.caption)
-                                                .fontWeight(.medium)
-                                        }
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(Color.blue)
-                                        .cornerRadius(8)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(.top, 4)
-                                }
-                            }
                         }
                         if uvcCameraManager.selectedDevice == nil {
                             HStack(spacing: 6) {
@@ -1805,9 +1617,7 @@ struct StatusOverlay: View {
                 title: "Recording",
                 subtitle: recordingManager.isRecording 
                     ? recordingManager.formatDuration(recordingManager.recordingDuration) 
-                    : (recordingManager.storageLocation == .cloud 
-                        ? recordingManager.cloudProvider.displayName 
-                        : "Local"),
+                    : "Local",
                 isExpanded: false,
                 accentColor: .red,
                 iconColor: recordingManager.isRecording ? .red : nil
@@ -1948,8 +1758,6 @@ struct StatusOverlay: View {
                 positionLayoutPanelContent
             case .cameraCalibration:
                 cameraCalibrationPanelContent
-            case .cloudStorageDebug:
-                cloudStorageDebugPanelContent
             case .visualizations:
                 visualizationsPanelContent
             case .handTracking:
@@ -1981,7 +1789,6 @@ struct StatusOverlay: View {
         case .statusPosition: return "Controller Position"
         case .positionLayout: return "Position & Layout"
         case .cameraCalibration: return "Camera Calibration"
-        case .cloudStorageDebug: return "Cloud Storage Debug"
         case .visualizations: return "Visualizations"
         case .handTracking: return "Hand Tracking"
         case .stereoBaseline: return "Stereo Baseline"
@@ -2428,60 +2235,6 @@ struct StatusOverlay: View {
                 .padding(14)
                 .background(Color.white.opacity(0.1))
                 .cornerRadius(12)
-            } else if recordingManager.isUploadingToCloud {
-                // Cloud upload progress display
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "icloud.and.arrow.up")
-                            .font(.system(size: 18))
-                            .foregroundColor(recordingManager.cloudProvider.color)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Uploading to \(recordingManager.cloudProvider.displayName)")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.white)
-                            Text("Keep the app open until complete")
-                                .font(.caption2)
-                                .foregroundColor(.white.opacity(0.5))
-                        }
-                        Spacer()
-                    }
-                    
-                    // Progress bar
-                    let progress = recordingManager.cloudUploadTotalFiles > 0 
-                        ? Double(recordingManager.cloudUploadCurrentFile) / Double(recordingManager.cloudUploadTotalFiles) 
-                        : 0.0
-                    
-                    VStack(spacing: 8) {
-                        GeometryReader { geometry in
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 5)
-                                    .fill(Color.white.opacity(0.15))
-                                    .frame(height: 8)
-                                
-                                RoundedRectangle(cornerRadius: 5)
-                                    .fill(recordingManager.cloudProvider.color)
-                                    .frame(width: geometry.size.width * progress, height: 8)
-                                    .animation(.easeInOut(duration: 0.3), value: progress)
-                            }
-                        }
-                        .frame(height: 8)
-                        
-                        HStack {
-                            Text("\(recordingManager.cloudUploadCurrentFile) of \(recordingManager.cloudUploadTotalFiles) files")
-                                .font(.caption)
-                                .foregroundColor(.white.opacity(0.6))
-                            Spacer()
-                            Text("\(Int(progress * 100))%")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundColor(recordingManager.cloudProvider.color)
-                        }
-                    }
-                }
-                .padding(14)
-                .background(recordingManager.cloudProvider.color.opacity(0.12))
-                .cornerRadius(12)
             } else {
                 // Recording configuration
                 VStack(alignment: .leading, spacing: 16) {
@@ -2541,73 +2294,7 @@ struct StatusOverlay: View {
                             ) {
                                 recordingManager.storageLocation = .local
                             }
-                            
-                            storageOptionRow(
-                                icon: "icloud.fill",
-                                label: "iCloud Drive",
-                                description: "Sync across your Apple devices",
-                                isSelected: recordingManager.storageLocation == .cloud && recordingManager.cloudProvider == .iCloudDrive,
-                                color: .blue
-                            ) {
-                                recordingManager.storageLocation = .cloud
-                                recordingManager.cloudProvider = .iCloudDrive
-                                // KeychainManager.shared.save(CloudStorageProvider.iCloudDrive.rawValue, forKey: .selectedCloudProvider)
-                            }
-                            
-                            storageOptionRow(
-                                icon: "g.circle.fill",
-                                label: "Google Drive",
-                                description: cloudStorageSettings.isGoogleDriveAvailable ? "Upload to your Google account" : "Sign in required",
-                                isSelected: recordingManager.storageLocation == .cloud && recordingManager.cloudProvider == .googleDrive,
-                                color: Color(red: 0.26, green: 0.52, blue: 0.96),
-                                showWarning: !cloudStorageSettings.isGoogleDriveAvailable
-                            ) {
-                                recordingManager.storageLocation = .cloud
-                                recordingManager.cloudProvider = .googleDrive
-                                // KeychainManager.shared.save(CloudStorageProvider.googleDrive.rawValue, forKey: .selectedCloudProvider)
-                            }
-                            
-                            storageOptionRow(
-                                icon: "shippingbox.fill",
-                                label: "Dropbox",
-                                description: cloudStorageSettings.isDropboxAvailable ? "Upload to your Dropbox account" : "Sign in required",
-                                isSelected: recordingManager.storageLocation == .cloud && recordingManager.cloudProvider == .dropbox,
-                                color: Color(red: 0, green: 0.4, blue: 1),
-                                showWarning: !cloudStorageSettings.isDropboxAvailable
-                            ) {
-                                recordingManager.storageLocation = .cloud
-                                recordingManager.cloudProvider = .dropbox
-                                // KeychainManager.shared.save(CloudStorageProvider.dropbox.rawValue, forKey: .selectedCloudProvider)
-                            }
                         }
-                    }
-                    
-                    // Sign-in prompt for Google Drive
-                    if recordingManager.storageLocation == .cloud && recordingManager.cloudProvider == .googleDrive && !cloudStorageSettings.isGoogleDriveAvailable {
-                        Button {
-                            expandedPanel = .none
-                            isMinimized = true
-                            userInteracted = true
-                            Task {
-                                try? await Task.sleep(nanoseconds: 500_000_000)
-                                await GoogleDriveAuthManager.shared.startOAuthFlow()
-                                await MainActor.run { isMinimized = false }
-                            }
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "person.crop.circle.badge.plus")
-                                    .font(.system(size: 14))
-                                Text("Sign in to Google Drive")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(Color(red: 0.26, green: 0.52, blue: 0.96))
-                            .cornerRadius(10)
-                        }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -2668,71 +2355,6 @@ struct StatusOverlay: View {
     // Legacy helper for backwards compatibility
     private func storageOptionButton(icon: String, label: String, isSelected: Bool, color: Color, showWarning: Bool = false, action: @escaping () -> Void) -> some View {
         storageOptionRow(icon: icon, label: label, description: "", isSelected: isSelected, color: color, showWarning: showWarning, action: action)
-    }
-    
-    private var cloudStorageDebugPanelContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Header
-            Text("iCloud Keychain Sync Debug")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(.white)
-            
-            Divider()
-                .background(Color.white.opacity(0.2))
-            
-            // Current settings
-            VStack(alignment: .leading, spacing: 6) {
-                DebugInfoRow(label: "Selected Provider", value: recordingManager.cloudProvider.displayName)
-                DebugInfoRow(label: "Is Dropbox Available", value: CloudStorageSettings.shared.isDropboxAvailable ? "Yes" : "No")
-                if let lastSync = CloudStorageSettings.shared.lastSyncTime {
-                    DebugInfoRow(label: "Last Sync", value: lastSync.formatted(date: .omitted, time: .shortened))
-                }
-            }
-            
-            Divider()
-                .background(Color.white.opacity(0.2))
-            
-            // Raw keychain values
-            Text("Raw Keychain Values:")
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(.white.opacity(0.8))
-            
-            VStack(alignment: .leading, spacing: 6) {
-                let keychain = KeychainManager.shared
-                DebugInfoRow(label: "Provider Key", value: keychain.loadString(forKey: .selectedCloudProvider) ?? "nil")
-                DebugInfoRow(label: "Access Token", value: keychain.exists(key: .dropboxAccessToken) ? "✓ Present" : "✗ Missing")
-                DebugInfoRow(label: "Refresh Token", value: keychain.exists(key: .dropboxRefreshToken) ? "✓ Present" : "✗ Missing")
-            }
-            
-            Divider()
-                .background(Color.white.opacity(0.2))
-            
-            // Refresh button
-            Button {
-                CloudStorageSettings.shared.forceRefresh()
-                recordingManager.loadCloudSettings()
-            } label: {
-                HStack {
-                    Image(systemName: "arrow.clockwise")
-                    Text("Force Refresh from Keychain")
-                }
-                .font(.caption)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(Color.blue.opacity(0.3))
-                .cornerRadius(8)
-            }
-            .buttonStyle(.plain)
-            
-            // Help text
-            Text("Note: iCloud Keychain sync can take up to a few minutes. Ensure both devices use the same Apple ID with iCloud Keychain enabled.")
-                .font(.caption2)
-                .foregroundColor(.white.opacity(0.5))
-                .fixedSize(horizontal: false, vertical: true)
-        }
     }
     
     private var statusPositionPanelContent: some View {
