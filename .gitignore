@@ -1,35 +1,34 @@
-# macOS
+/*.egg-info
+/dist 
+*.pyc
+
+**/build
+**/log
+**/install
+build/
+
+# *.usdz
+
+**/__pycache__/
+
+# **/sam_models/
+
+**/Payload/
+
+*.usdz
+*.usda
+build/
+*.mp4
+# CloudKit private key - DO NOT COMMIT
+avp_stream/datasets/eckey.pem
+*.pem
+downloads/
+
+.DS_Store
+__pycache__/
+*.pyc
+xcuserdata/
+*.npz
 .DS_Store
 
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.venv/
-venv/
-env/
-.env
-.coverage
-htmlcov/
-dist/
-build/
-*.egg-info/
-pip-wheel-metadata/
-
-# Swift Package Manager
-.build/
-
-# Xcode user/build artifacts
-DerivedData/
-*.xcworkspace/xcuserdata/
-*.xcodeproj/xcuserdata/
-*.xcuserstate
-
-# Editor and logs
-.vscode/
-.idea/
-*.log
+MUJOCO_LOG.TXT
