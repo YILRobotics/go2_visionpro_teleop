@@ -452,20 +452,6 @@ class DataManager: ObservableObject {
     
     @Published var showExitConfirmation: Bool = false
     
-    // Flag to indicate calibration wizard is active (status view should minimize)
-    @Published var isCalibrationWizardActive: Bool = false
-    
-    // MARK: - Python Calibration Mode State
-    // These are updated via gRPC when Python calibration server sends status (m00=778.0)
-    @Published var pythonCalibrationActive: Bool = false
-    @Published var pythonCalibrationStep: Int = 0  // 0, 1, 2 for extrinsic steps
-    @Published var pythonCalibrationSamplesCollected: Int = 0
-    @Published var pythonCalibrationSamplesNeeded: Int = 20
-    @Published var pythonCalibrationTargetMarker: Int = 0  // 0, 2, or 3
-    @Published var pythonCalibrationMarkerDetected: Bool = false
-    @Published var pythonCalibrationProgress: Float = 0.0
-    @Published var pythonCalibrationStepStatus: Int = 0  // 0=collecting, 1=calibrating, 2=complete
-    
     private init() {
         // Load saved video source or default to network
         self.videoSource = VideoSource(rawValue: UserDefaults.standard.string(forKey: "videoSource") ?? "") ?? .network

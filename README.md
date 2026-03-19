@@ -1,5 +1,10 @@
 <!-- omit in toc -->
-VisionProTeleop
+VisionProTeleop Unitree Go2 
+
+
+### Modified Mycobot reop and app to work with Unitree Go2
+
+
 ===========
 
 

@@ -44,6 +44,77 @@ class NetworkInfoManager: ObservableObject {
     }
 }
 
+/// Returns active local interface addresses used for connection diagnostics.
+private func getIPAddresses() -> [(name: String, address: String)] {
+    var addresses: [(name: String, address: String)] = []
+    var ifaddr: UnsafeMutablePointer<ifaddrs>?
+
+    guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else {
+        return []
+    }
+    defer { freeifaddrs(ifaddr) }
+
+    var ptr = firstAddr
+    while true {
+        let interface = ptr.pointee
+        guard let addr = interface.ifa_addr else {
+            guard let next = interface.ifa_next else { break }
+            ptr = next
+            continue
+        }
+        let family = addr.pointee.sa_family
+
+        if family == UInt8(AF_INET) || family == UInt8(AF_INET6) {
+            let rawName = String(cString: interface.ifa_name)
+
+            // Skip loopback and inactive interfaces.
+            if rawName != "lo0" && (interface.ifa_flags & UInt32(IFF_UP)) != 0 {
+                var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                let result = getnameinfo(
+                    addr,
+                    socklen_t(addr.pointee.sa_len),
+                    &host,
+                    socklen_t(host.count),
+                    nil,
+                    0,
+                    NI_NUMERICHOST
+                )
+
+                if result == 0 {
+                    var address = String(cString: host)
+                    // Remove IPv6 zone identifier suffix (e.g. "%en0") for cleaner UI.
+                    if let zoneIndex = address.firstIndex(of: "%") {
+                        address = String(address[..<zoneIndex])
+                    }
+                    if !address.hasPrefix("fe80:") {
+                        let displayName: String
+                        switch rawName {
+                        case "en0":
+                            displayName = "Wi-Fi"
+                        case "en1":
+                            displayName = "Ethernet"
+                        case "pdp_ip0":
+                            displayName = "Cellular"
+                        default:
+                            displayName = rawName
+                        }
+                        addresses.append((displayName, address))
+                    }
+                }
+            }
+        }
+
+        guard let next = interface.ifa_next else { break }
+        ptr = next
+    }
+
+    // Deduplicate by IP and keep stable order by interface name.
+    var seen = Set<String>()
+    return addresses
+        .filter { seen.insert($0.address).inserted }
+        .sorted { $0.name < $1.name }
+}
+
 /// Enum to track which settings panel is currently expanded
 enum ExpandedPanel: Equatable {
     case none
@@ -52,7 +123,6 @@ enum ExpandedPanel: Equatable {
     case viewControls
     case recording
     case statusPosition
-    case cameraCalibration  // Unified camera calibration
     case visualizations  // Hand/head visualization toggles
     case positionLayout  // Combined video view + controller position
     case handTracking  // Hand tracking configuration (prediction, etc.)
@@ -101,14 +171,8 @@ struct StatusOverlay: View {
     @State private var expandedPanel: ExpandedPanel = .none
     @State private var showLocalExitConfirmation: Bool = false
     @State private var mujocoStatusUpdateTrigger: Bool = false  // Trigger for MuJoCo status updates
-    @State private var showCalibrationSheet: Bool = false
-    @State private var showExtrinsicCalibrationSheet: Bool = false
-    @State private var showCalibrationWizard: Bool = false
-    @State private var startCalibrationVerification: Bool = false
     @State private var resetHighlight: Bool = false
 
-    @ObservedObject private var calibrationManager = CameraCalibrationManager.shared
-    @ObservedObject private var extrinsicCalibrationManager = ExtrinsicCalibrationManager.shared
     @ObservedObject private var signalingClient = SignalingClient.shared
     
     // App mode persistence
@@ -146,53 +210,6 @@ struct StatusOverlay: View {
                 }
             }
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: isMinimized)
-            
-            // Calibration overlay
-            if showCalibrationSheet {
-                CameraCalibrationView(onDismiss: {
-                    showCalibrationSheet = false
-                })
-                .frame(width: 500, height: 700)
-                .background(.regularMaterial)
-                .cornerRadius(20)
-                .shadow(radius: 20)
-            }
-            
-            // Extrinsic calibration overlay
-            if showExtrinsicCalibrationSheet {
-                ExtrinsicCalibrationViewNew(onDismiss: {
-                    showExtrinsicCalibrationSheet = false
-                })
-                .frame(width: 500, height: 700)
-                .background(.regularMaterial)
-                .cornerRadius(20)
-                .shadow(radius: 20)
-            }
-            
-            // Camera Calibration Wizard overlay
-            if showCalibrationWizard {
-                CameraCalibrationWizardView(onDismiss: {
-                    showCalibrationWizard = false
-                    startCalibrationVerification = false
-                }, initialStep: startCalibrationVerification ? .verification : .setup)
-                .frame(width: 520, height: 720)
-                .background(.regularMaterial)
-                .cornerRadius(20)
-                .shadow(radius: 20)
-            }
-            
-            // Python Calibration Status Overlay (from calibration_server.py)
-            if dataManager.pythonCalibrationActive {
-                PythonCalibrationStatusOverlay(
-                    step: dataManager.pythonCalibrationStep,
-                    targetMarker: dataManager.pythonCalibrationTargetMarker,
-                    samplesCollected: dataManager.pythonCalibrationSamplesCollected,
-                    samplesNeeded: dataManager.pythonCalibrationSamplesNeeded,
-                    markerDetected: dataManager.pythonCalibrationMarkerDetected,
-                    progress: dataManager.pythonCalibrationProgress,
-                    stepStatus: dataManager.pythonCalibrationStepStatus
-                )
-            }
         }
         .onAppear {
             dlog("🔴 [StatusView] StatusOverlay onAppear called")
@@ -1377,41 +1394,15 @@ struct StatusOverlay: View {
             if appMode == .egorecord {
                 Divider()
                     .background(Color.white.opacity(0.3))
-                
-                // Check requirements
-                let hasIntrinsic = uvcCameraManager.selectedDevice.map { calibrationManager.hasCalibration(for: $0.id) } ?? false
-                let hasExtrinsic = uvcCameraManager.selectedDevice.map { extrinsicCalibrationManager.hasCalibration(for: $0.id) } ?? false
-                let isCalibrated = hasIntrinsic && hasExtrinsic
-                let canRecord = isCalibrated && uvcCameraManager.selectedDevice != nil
-                
-                // Allow recording without full requirements (hand-tracking only mode)
-                // Users can always record hand tracking data, even without camera or calibration
-                let canRecordHandTrackingOnly = true
-                
-                // Requirement indicators (warnings, not blockers)
-                if !canRecord {
-                    VStack(alignment: .leading, spacing: 6) {
-                        if !isCalibrated && uvcCameraManager.selectedDevice != nil {
-                            HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
-                                Text("Camera calibration required for video")
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
-                            }
-                            .opacity(flashingOpacity)
-                        }
-                        if uvcCameraManager.selectedDevice == nil {
-                            HStack(spacing: 6) {
-                                Image(systemName: "video.slash.fill")
-                                    .font(.caption)
-                                    .foregroundColor(.yellow)
-                                Text("No USB camera - hand tracking only")
-                                    .font(.caption)
-                                    .foregroundColor(.yellow)
-                            }
-                        }
+                let hasCamera = uvcCameraManager.selectedDevice != nil
+                if !hasCamera {
+                    HStack(spacing: 6) {
+                        Image(systemName: "video.slash.fill")
+                            .font(.caption)
+                            .foregroundColor(.yellow)
+                        Text("No USB camera - hand tracking only")
+                            .font(.caption)
+                            .foregroundColor(.yellow)
                     }
                     .padding(.vertical, 6)
                 }
@@ -1443,12 +1434,11 @@ struct StatusOverlay: View {
                     .background(
                         recordingManager.isRecording 
                             ? Color.red
-                            : (canRecordHandTrackingOnly ? Color.red.opacity(0.9) : Color.gray.opacity(0.5))
+                            : Color.red.opacity(0.9)
                     )
                     .cornerRadius(12)
                 }
                 .buttonStyle(.plain)
-                .disabled(!canRecordHandTrackingOnly && !recordingManager.isRecording)
             }
 
         }
@@ -1627,16 +1617,6 @@ struct StatusOverlay: View {
                 }
             }
             
-            // Camera Calibration menu item (Egorecord mode only)
-            if appMode == .egorecord {
-                let hasIntrinsic = uvcCameraManager.selectedDevice.map { calibrationManager.hasCalibration(for: $0.id) } ?? false
-                let hasExtrinsic = uvcCameraManager.selectedDevice.map { extrinsicCalibrationManager.hasCalibration(for: $0.id) } ?? false
-                let isCalibrated = hasIntrinsic && hasExtrinsic
-                
-                cameraCalibrationMenuItem
-                    .opacity(isCalibrated ? 1.0 : flashingOpacity)
-            }
-            
             // Teleop-only menu items
             if appMode == .teleop {
                 Divider()
@@ -1756,8 +1736,6 @@ struct StatusOverlay: View {
                 statusPositionPanelContent
             case .positionLayout:
                 positionLayoutPanelContent
-            case .cameraCalibration:
-                cameraCalibrationPanelContent
             case .visualizations:
                 visualizationsPanelContent
             case .handTracking:
@@ -1788,7 +1766,6 @@ struct StatusOverlay: View {
         case .recording: return "Recording"
         case .statusPosition: return "Controller Position"
         case .positionLayout: return "Position & Layout"
-        case .cameraCalibration: return "Camera Calibration"
         case .visualizations: return "Visualizations"
         case .handTracking: return "Hand Tracking"
         case .stereoBaseline: return "Stereo Baseline"
@@ -3678,550 +3655,6 @@ struct StatusOverlay: View {
         .presentationDetents([.medium])
     }
     
-    // MARK: - Unified Camera Calibration Panel
-    
-
-    
-    @ViewBuilder
-    private var cameraCalibrationMenuItem: some View {
-        // Camera calibration is not yet supported
-        HStack(spacing: 12) {
-            Image(systemName: "camera.aperture")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(.white.opacity(0.3))
-                .frame(width: 28)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Camera Calibration")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.white.opacity(0.4))
-                Text("Not supported yet")
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.3))
-            }
-            
-            Spacer()
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 4)
-    }
-    
-    private var cameraCalibrationPanelContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let device = uvcCameraManager.selectedDevice {
-                let hasIntrinsic = calibrationManager.hasCalibration(for: device.id)
-                let hasExtrinsic = extrinsicCalibrationManager.hasCalibration(for: device.id)
-                
-                // Camera name and overall status
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(device.name)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
-                    
-                    // Status badges
-                    HStack(spacing: 8) {
-                        calibrationStatusBadge(
-                            title: "Intrinsic",
-                            isCalibrated: hasIntrinsic,
-                            color: .cyan
-                        )
-                        calibrationStatusBadge(
-                            title: "Extrinsic",
-                            isCalibrated: hasExtrinsic,
-                            color: .purple
-                        )
-                    }
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.1), Color.white.opacity(0.05)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .cornerRadius(10)
-                
-                // Calibration Results (if calibrated)
-                if hasIntrinsic || hasExtrinsic {
-                    VStack(alignment: .leading, spacing: 10) {
-                        // Intrinsic results
-                        if hasIntrinsic, let intrinsic = calibrationManager.allCalibrations[device.id] {
-                            calibrationResultRow(
-                                icon: "camera.aperture",
-                                title: "Intrinsic",
-                                subtitle: "fx=\(Int(intrinsic.leftIntrinsics.fx)), fy=\(Int(intrinsic.leftIntrinsics.fy))",
-                                detail: String(format: "%.4f px", intrinsic.leftIntrinsics.reprojectionError),
-                                isGood: intrinsic.leftIntrinsics.reprojectionError < 0.5,
-                                color: .cyan
-                            )
-                        }
-                        
-                        // Extrinsic results
-                        if hasExtrinsic, let extrinsic = extrinsicCalibrationManager.allCalibrations[device.id] {
-                            let translation = SIMD3<Float>(
-                                extrinsic.leftHeadToCameraMatrix.columns.3.x,
-                                extrinsic.leftHeadToCameraMatrix.columns.3.y,
-                                extrinsic.leftHeadToCameraMatrix.columns.3.z
-                            )
-                            let distance = simd_length(translation) * 100 // cm
-                            
-                            calibrationResultRow(
-                                icon: "arrow.triangle.swap",
-                                title: "Extrinsic",
-                                subtitle: String(format: "%.1f cm from head", distance),
-                                detail: String(format: "%.4f m", extrinsic.leftReprojectionError),
-                                isGood: extrinsic.leftReprojectionError < 0.01,
-                                color: .purple
-                            )
-                        }
-                    }
-                    .padding(12)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(10)
-                }
-                
-                // Info text when not calibrated
-                if !hasIntrinsic && !hasExtrinsic {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label("Why Calibrate?", systemImage: "info.circle.fill")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(.white.opacity(0.8))
-                        
-                        Text("Camera calibration enables accurate pose estimation and is required for teleoperation. The wizard will guide you through both intrinsic and extrinsic calibration.")
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.5))
-                            .lineSpacing(2)
-                    }
-                    .padding(12)
-                    .background(Color.blue.opacity(0.1))
-                    .cornerRadius(10)
-                }
-                
-                // Big calibrate button
-                Button {
-                    showCalibrationWizard = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: hasIntrinsic && hasExtrinsic ? "arrow.clockwise" : "camera.aperture")
-                            .font(.system(size: 16, weight: .bold))
-                        Text(hasIntrinsic && hasExtrinsic ? "Recalibrate" : "Calibrate Camera")
-                            .font(.headline)
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.cyan, Color.purple],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .cornerRadius(12)
-                }
-                .buttonStyle(.plain)
-                
-                // Direct Verify button (if calibrated)
-                if hasExtrinsic {
-                    Button {
-                        startCalibrationVerification = true
-                        showCalibrationWizard = true
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark.circle")
-                                .font(.system(size: 16, weight: .bold))
-                            Text("Verify Calibration")
-                                .font(.headline)
-                        }
-                        .foregroundColor(.green)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.green.opacity(0.15))
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.green.opacity(0.5), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-                
-                // Delete calibration button (if calibrated)
-                if hasIntrinsic || hasExtrinsic {
-                    Button {
-                        if hasIntrinsic {
-                            calibrationManager.deleteCalibration(for: device.id)
-                        }
-                        if hasExtrinsic {
-                            extrinsicCalibrationManager.deleteCalibration(for: device.id)
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "trash")
-                                .font(.caption)
-                            Text("Delete All Calibration Data")
-                                .font(.caption)
-                        }
-                        .foregroundColor(.red.opacity(0.8))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Color.red.opacity(0.1))
-                        .cornerRadius(8)
-                    }
-                    .buttonStyle(.plain)
-                }
-                
-            } else {
-                // No camera selected
-                VStack(spacing: 12) {
-                    Image(systemName: "video.slash")
-                        .font(.system(size: 32))
-                        .foregroundColor(.white.opacity(0.4))
-                    Text("No camera selected")
-                        .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.5))
-                    Text("Connect a USB camera to get started")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.3))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-            }
-        }
-    }
-    
-    private func calibrationStatusBadge(title: String, isCalibrated: Bool, color: Color) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: isCalibrated ? "checkmark.circle.fill" : "circle.dashed")
-                .font(.system(size: 10))
-            Text(title)
-                .font(.caption2)
-                .fontWeight(.medium)
-        }
-        .foregroundColor(isCalibrated ? color : .white.opacity(0.5))
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(isCalibrated ? color.opacity(0.2) : Color.white.opacity(0.1))
-        .cornerRadius(6)
-    }
-    
-    private func calibrationResultRow(icon: String, title: String, subtitle: String, detail: String, isGood: Bool, color: Color) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundColor(color)
-                .frame(width: 24)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.white)
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.6))
-            }
-            
-            Spacer()
-            
-            HStack(spacing: 4) {
-                Image(systemName: isGood ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .font(.system(size: 10))
-                Text(detail)
-                    .font(.caption2)
-                    .fontWeight(.medium)
-            }
-            .foregroundColor(isGood ? .green : .orange)
-        }
-    }
-    
-    // Keep the old views for backward compatibility (will be removed later)
-    private var calibrationPanelContent: some View {
-        cameraCalibrationPanelContent
-    }
-    
-    private var extrinsicCalibrationPanelContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Camera status
-            if let device = uvcCameraManager.selectedDevice {
-                let hasIntrinsic = calibrationManager.hasCalibration(for: device.id)
-                let hasExtrinsic = extrinsicCalibrationManager.hasCalibration(for: device.id)
-                
-                // Status header
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(device.name)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(.white)
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: hasExtrinsic ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                            .font(.caption)
-                            .foregroundColor(hasExtrinsic ? .green : .orange)
-                        Text(hasExtrinsic ? "Extrinsic Calibrated" : "Not Calibrated")
-                            .font(.caption)
-                            .foregroundColor(hasExtrinsic ? .green : .orange)
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(hasExtrinsic ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
-                .cornerRadius(8)
-                
-                // Show calibration details if available
-                if hasExtrinsic, let calibration = extrinsicCalibrationManager.allCalibrations[device.id] {
-                    VStack(alignment: .leading, spacing: 6) {
-                        // Mono/Stereo badge
-                        HStack {
-                            Text(calibration.isStereo ? "Stereo" : "Mono")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(calibration.isStereo ? Color.blue.opacity(0.5) : Color.gray.opacity(0.5))
-                                .cornerRadius(4)
-                            Spacer()
-                        }
-                        
-                        // Left/Mono camera transform
-                        Text(calibration.isStereo ? "T_head^left_camera (Head to Left)" : "T_head^camera (Head to Camera)")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .foregroundColor(.white.opacity(0.7))
-                        
-                        // Display 4x4 matrix
-                        let t = calibration.leftHeadToCameraMatrix
-                        Matrix4x4View(matrix: t, color: .purple)
-                        
-                        // Left reprojection error
-                        Text("Reproj: \(String(format: "%.4f m", calibration.leftReprojectionError)) (\(calibration.leftSampleCount) samples)")
-                            .font(.caption2)
-                            .foregroundColor(calibration.leftReprojectionError < 0.01 ? .green : (calibration.leftReprojectionError < 0.05 ? .orange : .red))
-                        
-                        // Right camera transform (stereo only)
-                        if calibration.isStereo, let rightMatrix = calibration.rightHeadToCameraMatrix {
-                            Divider()
-                                .background(Color.white.opacity(0.2))
-                            
-                            Text("T_head^right_camera (Head to Right)")
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                                .foregroundColor(.white.opacity(0.7))
-                            
-                            Matrix4x4View(matrix: rightMatrix, color: .cyan)
-                            
-                            if let rightError = calibration.rightReprojectionError, let rightCount = calibration.rightSampleCount {
-                                Text("Reproj: \(String(format: "%.4f m", rightError)) (\(rightCount) samples)")
-                                    .font(.caption2)
-                                    .foregroundColor(rightError < 0.01 ? .green : (rightError < 0.05 ? .orange : .red))
-                            }
-                        }
-                        
-                        // Metadata
-                        HStack {
-                            Text("\(calibration.markerCount) markers")
-                                .font(.caption2)
-                                .foregroundColor(.white.opacity(0.5))
-                        }
-                        .padding(.top, 2)
-                        
-                        Text(calibration.calibrationDate, style: .date)
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.4))
-                        
-                        // 3D Visualization of camera pose
-                        Divider()
-                            .background(Color.white.opacity(0.2))
-                            .padding(.vertical, 4)
-                        
-                        Text("3D View (Head Frame)")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .foregroundColor(.white.opacity(0.7))
-                        
-                        ExtrinsicCalibration3DView(calibration: calibration)
-                            .frame(height: 150)
-                            .background(Color.black.opacity(0.3))
-                            .cornerRadius(8)
-                        
-                        // Copy to clipboard button
-                        Button(action: {
-                            UIPasteboard.general.string = calibration.exportAsJSON()
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "doc.on.doc")
-                                    .font(.caption2)
-                                Text("Copy JSON to Clipboard")
-                                    .font(.caption2)
-                            }
-                            .foregroundColor(.blue)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.blue.opacity(0.15))
-                            .cornerRadius(6)
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(8)
-                }
-                
-                // Prerequisites check
-                if !hasIntrinsic {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.caption)
-                                .foregroundColor(.orange)
-                            Text("Intrinsic Calibration Required")
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                                .foregroundColor(.orange)
-                        }
-                        Text("Please complete intrinsic calibration first for accurate extrinsic calibration.")
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.5))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(Color.orange.opacity(0.1))
-                    .cornerRadius(8)
-                }
-                
-                // What is extrinsic calibration
-                if !hasExtrinsic && hasIntrinsic {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("What is Extrinsic Calibration?")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .foregroundColor(.white.opacity(0.8))
-                        Text("Determines the rigid transform between Vision Pro's head and your external camera. Required for teleoperation when camera is mounted to the headset.")
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.5))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(8)
-                    
-                    // Instructions
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("How to Calibrate:")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .foregroundColor(.white.opacity(0.8))
-                        Text("1. Print ArUco markers (see utils/generate_aruco_markers.py)")
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.5))
-                        Text("2. Place markers in your environment")
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.5))
-                        Text("3. Point camera at markers while moving head")
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.5))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(8)
-                }
-                
-                // Settings
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Marker Settings")
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundColor(.white.opacity(0.7))
-                    
-                    HStack {
-                        Text("Marker Size")
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.8))
-                        Spacer()
-                        Text("\(Int(extrinsicCalibrationManager.markerSizeMeters * 1000)) mm")
-                            .font(.caption)
-                            .foregroundColor(.white)
-                            .monospacedDigit()
-                    }
-                    
-                    Slider(value: Binding(
-                        get: { extrinsicCalibrationManager.markerSizeMeters * 1000 },
-                        set: { extrinsicCalibrationManager.markerSizeMeters = $0 / 1000 }
-                    ), in: 50...200, step: 10)
-                    .tint(.purple)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(Color.white.opacity(0.05))
-                .cornerRadius(8)
-                
-                // Calibrate button
-                Button {
-                    if hasIntrinsic {
-                        showExtrinsicCalibrationSheet = true
-                    }
-                } label: {
-                    HStack {
-                        Image(systemName: "arrow.triangle.swap")
-                            .font(.system(size: 12, weight: .bold))
-                        Text(hasExtrinsic ? "Recalibrate" : "Start Calibration")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(hasIntrinsic ? Color.purple : Color.gray)
-                    .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-                .disabled(!hasIntrinsic)
-                
-                // Delete button if calibration exists
-                if hasExtrinsic {
-                    Button {
-                        extrinsicCalibrationManager.deleteCalibration(for: device.id)
-                    } label: {
-                        HStack {
-                            Image(systemName: "trash")
-                                .font(.system(size: 12, weight: .bold))
-                            Text("Delete Calibration")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                        }
-                        .foregroundColor(.red)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Color.red.opacity(0.15))
-                        .cornerRadius(8)
-                    }
-                    .buttonStyle(.plain)
-                }
-                
-            } else {
-                // No camera selected
-                VStack(spacing: 8) {
-                    Image(systemName: "video.slash")
-                        .font(.title2)
-                        .foregroundColor(.white.opacity(0.5))
-                    Text("No camera selected")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.5))
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-            }
-        }
-    }
 }
 
 /// Preview view that looks exactly like the minimized status but with 50% opacity
@@ -4290,299 +3723,6 @@ struct StatusPreviewView: View {
     }
 }
 
-// MARK: - 4x4 Matrix View
-
-/// A view that displays a 4x4 matrix in a compact grid format
-struct Matrix4x4View: View {
-    let matrix: simd_float4x4
-    let color: Color
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            ForEach(0..<4, id: \.self) { row in
-                HStack(spacing: 2) {
-                    ForEach(0..<4, id: \.self) { col in
-                        // matrix is column-major, so access as matrix.columns[col][row]
-                        let value = matrix[col][row]
-                        Text(formatValue(value))
-                            .font(.system(size: 7, design: .monospaced))
-                            .foregroundColor(color)
-                            .frame(width: 42, alignment: .trailing)
-                    }
-                }
-            }
-        }
-        .padding(4)
-        .background(Color.black.opacity(0.2))
-        .cornerRadius(4)
-    }
-    
-    private func formatValue(_ value: Float) -> String {
-        if abs(value) < 0.0001 {
-            return "0.000"
-        } else if abs(value) >= 100 {
-            return String(format: "%.1f", value)
-        } else if abs(value) >= 10 {
-            return String(format: "%.2f", value)
-        } else {
-            return String(format: "%.3f", value)
-        }
-    }
-}
-
-// MARK: - 3D Visualization for Extrinsic Calibration
-
-/// A 2D canvas that draws a 3D visualization of the camera pose relative to the head frame
-struct ExtrinsicCalibration3DView: View {
-    let calibration: ExtrinsicCalibrationData
-    
-    // View rotation state (radians)
-    @State private var viewAngleX: Float = -0.4  // tilt down
-    @State private var viewAngleY: Float = 0.3   // rotate right
-    @State private var lastDragLocation: CGPoint? = nil
-    
-    var body: some View {
-        Canvas { context, size in
-            let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            let scale: CGFloat = 300  // pixels per meter
-            
-            // Draw grid on XZ plane (draw first so it's behind)
-            drawGrid(context: context, center: center, scale: scale,
-                    viewAngleX: viewAngleX, viewAngleY: viewAngleY)
-            
-            // Draw head frame at origin (coordinate axes)
-            drawCoordinateAxes(context: context, center: center, scale: scale,
-                             transform: matrix_identity_float4x4,
-                             viewAngleX: viewAngleX, viewAngleY: viewAngleY,
-                             label: "Head", axisLength: 0.05)
-            
-            // Draw left/mono camera
-            // leftHeadToCameraMatrix is T^camera_head (transforms points from head frame to camera frame)
-            // To get camera pose in head frame, we need the inverse
-            // Camera axes are in OpenCV convention: X-right, Y-down, Z-forward (optical axis)
-            let leftHeadToCamera = calibration.leftHeadToCameraMatrix
-            let leftCameraInHead = simd_inverse(leftHeadToCamera)
-            drawCoordinateAxes(context: context, center: center, scale: scale,
-                             transform: leftCameraInHead,
-                             viewAngleX: viewAngleX, viewAngleY: viewAngleY,
-                             label: calibration.isStereo ? "L" : "Cam", axisLength: 0.03)
-            
-            // Draw camera frustum for left camera
-            drawCameraFrustum(context: context, center: center, scale: scale,
-                            transform: leftCameraInHead,
-                            viewAngleX: viewAngleX, viewAngleY: viewAngleY,
-                            color: .purple.opacity(0.5))
-            
-            // Draw right camera if stereo
-            if calibration.isStereo, let rightHeadToCamera = calibration.rightHeadToCameraMatrix {
-                let rightCameraInHead = simd_inverse(rightHeadToCamera)
-                drawCoordinateAxes(context: context, center: center, scale: scale,
-                                 transform: rightCameraInHead,
-                                 viewAngleX: viewAngleX, viewAngleY: viewAngleY,
-                                 label: "R", axisLength: 0.03)
-                
-                drawCameraFrustum(context: context, center: center, scale: scale,
-                                transform: rightCameraInHead,
-                                viewAngleX: viewAngleX, viewAngleY: viewAngleY,
-                                color: .cyan.opacity(0.5))
-            }
-            
-            // Draw rotation hint
-            let hintText = "Drag to rotate"
-            context.draw(Text(hintText).font(.system(size: 7)).foregroundColor(.white.opacity(0.3)),
-                        at: CGPoint(x: size.width - 35, y: size.height - 8), anchor: .center)
-        }
-        .gesture(
-            DragGesture()
-                .onChanged { value in
-                    if let last = lastDragLocation {
-                        let deltaX = Float(value.location.x - last.x) * 0.01
-                        let deltaY = Float(value.location.y - last.y) * 0.01
-                        viewAngleY += deltaX
-                        viewAngleX -= deltaY
-                        // Clamp vertical angle to avoid flipping
-                        viewAngleX = max(-Float.pi / 2 + 0.1, min(Float.pi / 2 - 0.1, viewAngleX))
-                    }
-                    lastDragLocation = value.location
-                }
-                .onEnded { _ in
-                    lastDragLocation = nil
-                }
-        )
-    }
-    
-    /// Project a 3D point to 2D screen coordinates
-    /// 
-    /// Input coordinate system (ARKit head frame):
-    /// - X: right (wearer's right)
-    /// - Y: up  
-    /// - Z: backward (toward back of head)
-    /// 
-    /// Display coordinate system (standard graphics):
-    /// - X: right on screen
-    /// - Y: up on screen (but screen Y increases downward, handled in final projection)
-    /// - Z: into screen (away from viewer)
-    ///
-    /// To convert: we negate Z so that "backward" (ARKit +Z) becomes "into screen" (display +Z)
-    private func project3DTo2D(point: SIMD3<Float>, center: CGPoint, scale: CGFloat,
-                               viewAngleX: Float, viewAngleY: Float) -> CGPoint {
-        // Convert from ARKit convention to display convention
-        // ARKit: X-right, Y-up, Z-backward (right-handed)
-        // Display: X-right, Y-up, Z-into-screen (right-handed)
-        // The conversion is just negating Z
-        let displayPoint = SIMD3<Float>(point.x, point.y, -point.z)
-        
-        // Apply view rotation (right-handed convention)
-        let cosX = cos(viewAngleX)
-        let sinX = sin(viewAngleX)
-        let cosY = cos(viewAngleY)
-        let sinY = sin(viewAngleY)
-        
-        // Rotate around Y axis (right-handed)
-        let x1 = displayPoint.x * cosY - displayPoint.z * sinY
-        let z1 = displayPoint.x * sinY + displayPoint.z * cosY
-        let y1 = displayPoint.y
-        
-        // Then rotate around X axis (right-handed)
-        let y2 = y1 * cosX - z1 * sinX
-        let z2 = y1 * sinX + z1 * cosX
-        let x2 = x1
-        
-        // Simple orthographic projection (ignore z2 for depth)
-        let screenX = center.x + CGFloat(x2) * scale
-        let screenY = center.y - CGFloat(y2) * scale  // Y is up in 3D, down in screen
-        
-        return CGPoint(x: screenX, y: screenY)
-    }
-    
-    /// Draw coordinate axes at a given transform
-    private func drawCoordinateAxes(context: GraphicsContext, center: CGPoint, scale: CGFloat,
-                                    transform: simd_float4x4, viewAngleX: Float, viewAngleY: Float,
-                                    label: String, axisLength: Float) {
-        let origin = SIMD3<Float>(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
-        
-        // Extract rotation axes from transform
-        let xAxis = SIMD3<Float>(transform.columns.0.x, transform.columns.0.y, transform.columns.0.z)
-        let yAxis = SIMD3<Float>(transform.columns.1.x, transform.columns.1.y, transform.columns.1.z)
-        let zAxis = SIMD3<Float>(transform.columns.2.x, transform.columns.2.y, transform.columns.2.z)
-        
-        let originScreen = project3DTo2D(point: origin, center: center, scale: scale,
-                                         viewAngleX: viewAngleX, viewAngleY: viewAngleY)
-        
-        // Draw X axis (red)
-        let xEnd = origin + xAxis * axisLength
-        let xEndScreen = project3DTo2D(point: xEnd, center: center, scale: scale,
-                                       viewAngleX: viewAngleX, viewAngleY: viewAngleY)
-        var xPath = Path()
-        xPath.move(to: originScreen)
-        xPath.addLine(to: xEndScreen)
-        context.stroke(xPath, with: .color(.red), lineWidth: 2)
-        
-        // Draw Y axis (green)
-        let yEnd = origin + yAxis * axisLength
-        let yEndScreen = project3DTo2D(point: yEnd, center: center, scale: scale,
-                                       viewAngleX: viewAngleX, viewAngleY: viewAngleY)
-        var yPath = Path()
-        yPath.move(to: originScreen)
-        yPath.addLine(to: yEndScreen)
-        context.stroke(yPath, with: .color(.green), lineWidth: 2)
-        
-        // Draw Z axis (blue)
-        let zEnd = origin + zAxis * axisLength
-        let zEndScreen = project3DTo2D(point: zEnd, center: center, scale: scale,
-                                       viewAngleX: viewAngleX, viewAngleY: viewAngleY)
-        var zPath = Path()
-        zPath.move(to: originScreen)
-        zPath.addLine(to: zEndScreen)
-        context.stroke(zPath, with: .color(.blue), lineWidth: 2)
-        
-        // Draw label
-        let labelPoint = CGPoint(x: originScreen.x + 5, y: originScreen.y - 10)
-        context.draw(Text(label).font(.system(size: 8, weight: .bold)).foregroundColor(.white),
-                    at: labelPoint, anchor: .leading)
-    }
-    
-    /// Draw a simple camera frustum
-    /// The camera is in OpenCV convention where +Z is forward (optical axis)
-    private func drawCameraFrustum(context: GraphicsContext, center: CGPoint, scale: CGFloat,
-                                   transform: simd_float4x4, viewAngleX: Float, viewAngleY: Float,
-                                   color: Color) {
-        let origin = SIMD3<Float>(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
-        let zAxis = SIMD3<Float>(transform.columns.2.x, transform.columns.2.y, transform.columns.2.z)
-        let xAxis = SIMD3<Float>(transform.columns.0.x, transform.columns.0.y, transform.columns.0.z)
-        let yAxis = SIMD3<Float>(transform.columns.1.x, transform.columns.1.y, transform.columns.1.z)
-        
-        let frustumDepth: Float = 0.04
-        let frustumWidth: Float = 0.02
-        let frustumHeight: Float = 0.015
-        
-        // In OpenCV camera convention, +Z is forward (optical axis)
-        // So frustum points in +Z direction
-        let zOffset = zAxis * frustumDepth
-        let xOffset = xAxis * frustumWidth
-        let yOffset = yAxis * frustumHeight
-        
-        let corner0 = origin + zOffset + xOffset + yOffset
-        let corner1 = origin + zOffset - xOffset + yOffset
-        let corner2 = origin + zOffset - xOffset - yOffset
-        let corner3 = origin + zOffset + xOffset - yOffset
-        let corners = [corner0, corner1, corner2, corner3]
-        
-        let originScreen = project3DTo2D(point: origin, center: center, scale: scale,
-                                         viewAngleX: viewAngleX, viewAngleY: viewAngleY)
-        let cornerScreens = corners.map { project3DTo2D(point: $0, center: center, scale: scale,
-                                                        viewAngleX: viewAngleX, viewAngleY: viewAngleY) }
-        
-        // Draw frustum edges from origin to corners
-        for cornerScreen in cornerScreens {
-            var edgePath = Path()
-            edgePath.move(to: originScreen)
-            edgePath.addLine(to: cornerScreen)
-            context.stroke(edgePath, with: .color(color), lineWidth: 1)
-        }
-        
-        // Draw frustum rectangle
-        var rectPath = Path()
-        rectPath.move(to: cornerScreens[0])
-        for i in 1..<cornerScreens.count {
-            rectPath.addLine(to: cornerScreens[i])
-        }
-        rectPath.closeSubpath()
-        context.stroke(rectPath, with: .color(color), lineWidth: 1)
-    }
-    
-    /// Draw a reference grid on the XZ plane
-    private func drawGrid(context: GraphicsContext, center: CGPoint, scale: CGFloat,
-                         viewAngleX: Float, viewAngleY: Float) {
-        let gridSize: Float = 0.1  // 10cm
-        let gridLines = 3
-        
-        for i in -gridLines...gridLines {
-            let offset = Float(i) * gridSize / Float(gridLines)
-            
-            // Lines parallel to X
-            let xStart = project3DTo2D(point: SIMD3<Float>(-gridSize, 0, offset), center: center, scale: scale,
-                                       viewAngleX: viewAngleX, viewAngleY: viewAngleY)
-            let xEnd = project3DTo2D(point: SIMD3<Float>(gridSize, 0, offset), center: center, scale: scale,
-                                     viewAngleX: viewAngleX, viewAngleY: viewAngleY)
-            var xPath = Path()
-            xPath.move(to: xStart)
-            xPath.addLine(to: xEnd)
-            context.stroke(xPath, with: .color(.white.opacity(0.1)), lineWidth: 0.5)
-            
-            // Lines parallel to Z
-            let zStart = project3DTo2D(point: SIMD3<Float>(offset, 0, -gridSize), center: center, scale: scale,
-                                       viewAngleX: viewAngleX, viewAngleY: viewAngleY)
-            let zEnd = project3DTo2D(point: SIMD3<Float>(offset, 0, gridSize), center: center, scale: scale,
-                                     viewAngleX: viewAngleX, viewAngleY: viewAngleY)
-            var zPath = Path()
-            zPath.move(to: zStart)
-            zPath.addLine(to: zEnd)
-            context.stroke(zPath, with: .color(.white.opacity(0.1)), lineWidth: 0.5)
-        }
-    }
-}
-
 // MARK: - Debug Info Row Helper
 
 struct DebugInfoRow: View {
@@ -4608,155 +3748,4 @@ func createStatusEntity() -> Entity {
     let statusEntity = Entity()
     statusEntity.name = "statusDisplay"
     return statusEntity
-}
-
-// MARK: - Python Calibration Status Overlay
-
-/// Overlay displayed during Python-based extrinsic calibration
-/// Shows calibration progress, marker detection, and step information
-struct PythonCalibrationStatusOverlay: View {
-    let step: Int
-    let targetMarker: Int
-    let samplesCollected: Int
-    let samplesNeeded: Int
-    let markerDetected: Bool
-    let progress: Float
-    let stepStatus: Int  // 0=collecting, 1=calibrating, 2=complete
-    
-    private var statusColor: Color {
-        if stepStatus == 2 { return .green }
-        if markerDetected { return .green }
-        return .orange
-    }
-    
-    private var stepStatusText: String {
-        switch stepStatus {
-        case 1: return "Calibrating..."
-        case 2: return "Step Complete!"
-        default: return markerDetected ? "Collecting..." : "Looking for marker..."
-        }
-    }
-    
-    private var markerIds: [Int] { [0, 2, 3] }
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            // Header
-            HStack {
-                Image(systemName: "viewfinder")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.cyan)
-                Text("Extrinsic Calibration")
-                    .font(.headline)
-                    .foregroundColor(.white)
-            }
-            
-            Divider()
-                .background(Color.white.opacity(0.3))
-            
-            // Step indicator
-            HStack(spacing: 12) {
-                ForEach(0..<3, id: \.self) { i in
-                    let isCurrentStep = i == step
-                    let isCompleted = i < step
-                    
-                    HStack(spacing: 4) {
-                        if isCompleted {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                        } else if isCurrentStep {
-                            Image(systemName: "circle.dotted")
-                                .foregroundColor(.cyan)
-                        } else {
-                            Image(systemName: "circle")
-                                .foregroundColor(.white.opacity(0.3))
-                        }
-                        Text("Marker \(markerIds[i])")
-                            .font(.caption)
-                            .foregroundColor(isCurrentStep ? .white : .white.opacity(0.5))
-                    }
-                }
-            }
-            
-            // Current step details
-            VStack(spacing: 10) {
-                // Target marker
-                HStack {
-                    Text("Target:")
-                        .foregroundColor(.white.opacity(0.6))
-                    Spacer()
-                    Text("Marker ID \(targetMarker)")
-                        .font(.system(.body, design: .monospaced))
-                        .fontWeight(.bold)
-                        .foregroundColor(.cyan)
-                }
-                
-                // Detection status
-                HStack {
-                    Text("Status:")
-                        .foregroundColor(.white.opacity(0.6))
-                    Spacer()
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(statusColor)
-                            .frame(width: 8, height: 8)
-                        Text(stepStatusText)
-                            .foregroundColor(statusColor)
-                    }
-                }
-                
-                // Sample count
-                HStack {
-                    Text("Samples:")
-                        .foregroundColor(.white.opacity(0.6))
-                    Spacer()
-                    Text("\(samplesCollected) / \(samplesNeeded)")
-                        .font(.system(.body, design: .monospaced))
-                        .fontWeight(.medium)
-                        .foregroundColor(.white)
-                }
-                
-                // Progress bar
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white.opacity(0.2))
-                        .frame(height: 12)
-                    
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(statusColor)
-                        .frame(width: max(0, CGFloat(progress) * 200), height: 12)
-                        .animation(.easeInOut(duration: 0.3), value: progress)
-                }
-                .frame(width: 200)
-            }
-            
-            // Instructions
-            VStack(spacing: 4) {
-                if stepStatus == 2 {
-                    Text("✓ Step complete! Move to next marker.")
-                        .font(.caption)
-                        .foregroundColor(.green)
-                } else if !markerDetected {
-                    Text("Hold marker \(targetMarker) in camera view")
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                } else {
-                    Text("Keep marker steady while collecting samples")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.7))
-                }
-            }
-        }
-        .padding(20)
-        .frame(width: 280)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color.black.opacity(0.85))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(statusColor.opacity(0.5), lineWidth: 2)
-                )
-        )
-        .shadow(color: statusColor.opacity(0.3), radius: 20)
-    }
 }

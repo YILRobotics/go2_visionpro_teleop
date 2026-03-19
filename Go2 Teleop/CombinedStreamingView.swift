@@ -132,59 +132,6 @@ struct MarkerLabelView: View {
     }
 }
 
-
-// MARK: - Calibration Marker Label View (SwiftUI attachment for extrinsic calibration)
-
-struct CalibrationMarkerLabelView: View {
-    @ObservedObject var calibrationManager: ExtrinsicCalibrationManager
-    let index: Int
-    
-    var body: some View {
-        let sortedMarkers = calibrationManager.arkitTrackedMarkers.keys.sorted()
-        
-        if index < sortedMarkers.count {
-            let markerId = sortedMarkers[index]
-            VStack(spacing: 4) {
-                // Freeze toggle (only show for first marker)
-                if index == 0 {
-                    Toggle(isOn: $calibrationManager.isMarkerVisualizationFrozen) {
-                        Text("Freeze")
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .toggleStyle(.switch)
-                    .scaleEffect(0.7)
-                    .fixedSize()
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.black.opacity(0.5))
-                    )
-                    .foregroundColor(.white)
-                    .transaction { $0.animation = nil }
-                }
-                
-                // Marker info
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 8, height: 8)
-                    
-                    Text("CAL #\(markerId)")
-                        .font(.system(size: 14, weight: .bold))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.black.opacity(0.7))
-                )
-                .foregroundColor(.purple)
-            }
-        }
-    }
-}
-
 /// Combined Streaming View that supports:
 /// - Video/Audio streaming via WebRTC (from ImmersiveView)
 /// - MuJoCo simulation streaming via gRPC (from MuJoCoStreamingView)
@@ -199,7 +146,6 @@ struct CombinedStreamingView: View {
     @StateObject private var updateCache = CombinedStreamingUpdateCache()
     @ObservedObject private var dataManager = DataManager.shared
     @ObservedObject private var markerDetectionManager = MarkerDetectionManager.shared
-    @ObservedObject private var extrinsicCalibrationManager = ExtrinsicCalibrationManager.shared
     
     // Video state
     @State private var updateTrigger = false
@@ -399,7 +345,6 @@ struct CombinedStreamingView: View {
             let _ = dataManager.showHandJoints  // Trigger update when hand joints visibility changes
             let _ = dataManager.handJointsOpacity  // Trigger update when hand joints opacity changes
             let _ = handJointUpdateTrigger  // Trigger update when hand tracking data changes
-            let _ = extrinsicCalibrationManager.verificationMarkerPose // Trigger update when verification pose changes
             
             func findEntity(named name: String, in collection: RealityViewEntityCollection) -> Entity? {
                 for entity in collection {
@@ -467,11 +412,8 @@ struct CombinedStreamingView: View {
                 let uvcFrameAvailable = uvcFrame != nil && isUVCMode
                 let hasVideoFrame = isUVCMode ? uvcFrameAvailable : networkFrameAvailable
                 
-                // Hide video plane when calibration wizard is active (video goes to wizard instead)
-                let hideForCalibration = dataManager.isCalibrationWizardActive
-                
                 // Update video texture based on source
-                if hasVideoFrame && !hideForCalibration, let skyBox = skyBoxEntity {
+                if hasVideoFrame, let skyBox = skyBoxEntity {
                     let displayImage: UIImage
                     let imageWidth: CGFloat
                     let imageHeight: CGFloat
@@ -1038,114 +980,6 @@ struct CombinedStreamingView: View {
                 }
             }
 
-            
-            // === CALIBRATION MARKER UPDATE ===
-            if let calMarkerRoot = updateContent.entities.first(where: { $0.name == "calibrationMarkerRoot" }) {
-                // Only update poses if not frozen - otherwise keep markers at last known positions
-                if !extrinsicCalibrationManager.isMarkerVisualizationFrozen {
-                    // Update with current calibration markers
-                    let calMarkers = extrinsicCalibrationManager.arkitTrackedMarkers
-                    let markerCount = calMarkers.count
-                    let markerSize = extrinsicCalibrationManager.markerSizeMeters
-                    let halfSize = markerSize / 2
-                    
-                    var entityIndex = 0
-                    for (markerId, poseMatrix) in calMarkers.sorted(by: { $0.key < $1.key }) {
-                        guard entityIndex < 10 else { break }
-                        if let calMarkerEntity = calMarkerRoot.findEntity(named: "calMarker_\(entityIndex)") {
-                            // Apply same rotation correction as detection markers
-                            var transform = Transform(matrix: poseMatrix)
-                            let rotateX = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
-                            let rotateZ = simd_quatf(angle: .pi, axis: [0, 0, 1])
-                            transform.rotation = transform.rotation * rotateX * rotateZ
-                            calMarkerEntity.transform = transform
-                            calMarkerEntity.isEnabled = true
-                            
-                            // Update boundary edges
-                            if let boundary0 = calMarkerEntity.findEntity(named: "boundary_0") as? ModelEntity {
-                                boundary0.position = [0, halfSize, 0]
-                                boundary0.scale = [markerSize / 0.1, 1, 1]
-                            }
-                            if let boundary1 = calMarkerEntity.findEntity(named: "boundary_1") as? ModelEntity {
-                                boundary1.position = [0, -halfSize, 0]
-                                boundary1.scale = [markerSize / 0.1, 1, 1]
-                            }
-                            if let boundary2 = calMarkerEntity.findEntity(named: "boundary_2") as? ModelEntity {
-                                boundary2.position = [halfSize, 0, 0]
-                                boundary2.scale = [markerSize / 0.1, 1, 1]
-                                boundary2.transform.rotation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-                            }
-                            if let boundary3 = calMarkerEntity.findEntity(named: "boundary_3") as? ModelEntity {
-                                boundary3.position = [-halfSize, 0, 0]
-                                boundary3.scale = [markerSize / 0.1, 1, 1]
-                                boundary3.transform.rotation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-                            }
-                            
-                            // Update wall size to match marker width
-                            if let wall = calMarkerEntity.findEntity(named: "wall") as? ModelEntity {
-                                wall.scale = [markerSize / 0.1, 1, 1]
-                            }
-                            
-                            if let labelEntity = calMarkerEntity.findEntity(named: "label") {
-                                labelEntity.position = [0, 0, 0.05]
-                            }
-                            
-                            entityIndex += 1
-                        }
-                    }
-                    
-                    // Only disable markers beyond current count (avoid blanket disable which causes flashing)
-                    for i in entityIndex..<10 {
-                        if let calMarkerEntity = calMarkerRoot.findEntity(named: "calMarker_\(i)") {
-                            calMarkerEntity.isEnabled = false
-                        }
-                    }
-                }  // End of if !isMarkerVisualizationFrozen
-            }
-            
-            // === VERIFICATION MARKER UPDATE ===
-            if let verMarkerRoot = updateContent.entities.first(where: { $0.name == "verificationMarkerRoot" }) {
-                if let verMarker = verMarkerRoot.findEntity(named: "verificationMarker") {
-                    
-                    if let pose = extrinsicCalibrationManager.verificationMarkerPose {
-                        // Apply transform
-                        let transform = Transform(matrix: pose)
-                        // Note: verificationMarkerPose is already in World coordinate frame with correct orientation
-                        // (Computed via T_world_head * inv(T_head_cam) * T_cam_marker)
-                        // So no additional rotation correction is needed here.
-                        
-                        verMarker.transform = transform
-                        verMarker.isEnabled = true
-                        
-                        // Update boundary scale
-                        let markerSize = extrinsicCalibrationManager.markerSizeMeters
-                        let halfSize = markerSize / 2
-                        
-                        if let b0 = verMarker.findEntity(named: "boundary_0") as? ModelEntity {
-                            b0.position = [0, halfSize, 0]
-                            b0.scale = [markerSize / 0.1, 1, 1]
-                        }
-                        if let b1 = verMarker.findEntity(named: "boundary_1") as? ModelEntity {
-                            b1.position = [0, -halfSize, 0]
-                            b1.scale = [markerSize / 0.1, 1, 1]
-                        }
-                        if let b2 = verMarker.findEntity(named: "boundary_2") as? ModelEntity {
-                            b2.position = [halfSize, 0, 0]
-                            b2.scale = [markerSize / 0.1, 1, 1]
-                            b2.transform.rotation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-                        }
-                        if let b3 = verMarker.findEntity(named: "boundary_3") as? ModelEntity {
-                            b3.position = [-halfSize, 0, 0]
-                            b3.scale = [markerSize / 0.1, 1, 1]
-                            b3.transform.rotation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-                        }
-                        
-                    } else {
-                        verMarker.isEnabled = false
-                    }
-                }
-            }
-            
             // === ACCESSORY TRACKING ===
             // Update snapshots for streaming (captures current stylus transform)
             if #available(visionOS 26.0, *) {
@@ -1205,12 +1039,6 @@ struct CombinedStreamingView: View {
         ForEach(0..<20, id: \.self) { index in
             Attachment(id: "markerLabel_\(index)") {
                 MarkerLabelView(markerManager: markerDetectionManager, index: index)
-            }
-        }
-        // Calibration marker labels (10 labels)
-        ForEach(0..<10, id: \.self) { index in
-            Attachment(id: "calMarkerLabel_\(index)") {
-                CalibrationMarkerLabelView(calibrationManager: extrinsicCalibrationManager, index: index)
             }
         }
     }
@@ -1417,91 +1245,6 @@ struct CombinedStreamingView: View {
             }
         }
         
-        // === CALIBRATION MARKER VISUALIZATION (purple color scheme) ===
-        let calibrationMarkerRoot = Entity()
-        calibrationMarkerRoot.name = "calibrationMarkerRoot"
-        content.add(calibrationMarkerRoot)
-        
-        // Purple materials for calibration markers
-        var calXMaterial = UnlitMaterial()
-        calXMaterial.color = .init(tint: .red)
-        var calYMaterial = UnlitMaterial()
-        calYMaterial.color = .init(tint: .green)
-        var calZMaterial = UnlitMaterial()
-        calZMaterial.color = .init(tint: .blue)
-        var calOriginMaterial = UnlitMaterial()
-        calOriginMaterial.color = .init(tint: .white)
-        var calBoundaryMaterial = UnlitMaterial()
-        calBoundaryMaterial.color = .init(tint: UIColor(red: 0.7, green: 0.3, blue: 0.9, alpha: 0.9))  // Purple
-        
-        // Wall material - semi-transparent purple for visibility when visionOS hides passthrough
-        var calWallMaterial = SimpleMaterial()
-        calWallMaterial.color = .init(tint: UIColor(red: 0.5, green: 0.2, blue: 0.7, alpha: 0.4))
-        calWallMaterial.metallic = 0.0
-        calWallMaterial.roughness = 1.0
-        
-        let wallHeight: Float = 0.15  // 15cm wall height
-        
-        for i in 0..<10 {
-            let calMarkerContainer = Entity()
-            calMarkerContainer.name = "calMarker_\(i)"
-            calMarkerContainer.isEnabled = false
-            calibrationMarkerRoot.addChild(calMarkerContainer)
-            
-            // Origin sphere
-            let calOrigin = ModelEntity(mesh: originMesh, materials: [calOriginMaterial])
-            calOrigin.name = "origin"
-            calMarkerContainer.addChild(calOrigin)
-            
-            // Axes
-            let calXAxis = ModelEntity(mesh: axisMesh, materials: [calXMaterial])
-            calXAxis.name = "xAxis"
-            calXAxis.transform.rotation = simd_quatf(angle: -.pi / 2, axis: [0, 0, 1])
-            calXAxis.position = [axisLength / 2, 0, 0]
-            calMarkerContainer.addChild(calXAxis)
-            
-            let calYAxis = ModelEntity(mesh: axisMesh, materials: [calYMaterial])
-            calYAxis.name = "yAxis"
-            calYAxis.position = [0, axisLength / 2, 0]
-            calMarkerContainer.addChild(calYAxis)
-            
-            let calZAxis = ModelEntity(mesh: axisMesh, materials: [calZMaterial])
-            calZAxis.name = "zAxis"
-            calZAxis.transform.rotation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-            calZAxis.position = [0, 0, axisLength / 2]
-            calMarkerContainer.addChild(calZAxis)
-            
-            // Boundary
-            let calBoundaryMesh = MeshResource.generateBox(width: 0.1, height: boundaryWidth, depth: boundaryWidth)
-            for j in 0..<4 {
-                let calEdge = ModelEntity(mesh: calBoundaryMesh, materials: [calBoundaryMaterial])
-                calEdge.name = "boundary_\(j)"
-                calMarkerContainer.addChild(calEdge)
-            }
-            
-            // Wall - vertical plane extending upward from marker surface (15cm tall)
-            // Uses placeholder size, will be updated with actual marker size at runtime
-            // Wall extends in Z direction (normal to marker) which corresponds to "up" in the visualiztion
-            let wallMesh = MeshResource.generateBox(width: 0.1, height: 0.002, depth: wallHeight)
-            let wall = ModelEntity(mesh: wallMesh, materials: [calWallMaterial])
-            wall.name = "wall"
-            // Position: centered on marker X, half wall height up in Z direction (marker-local)
-            wall.position = [0, 0, wallHeight / 2]
-            calMarkerContainer.addChild(wall)
-            
-            // Label
-            let calLabelEntity = Entity()
-            calLabelEntity.name = "label"
-            calLabelEntity.position = [0, 0, 0.05]
-            calMarkerContainer.addChild(calLabelEntity)
-            
-            if let calLabelAttachment = attachments.entity(for: "calMarkerLabel_\(i)") {
-                calLabelAttachment.setParent(calLabelEntity)
-                // Add billboard component so label always faces the user
-                calLabelAttachment.components.set(BillboardComponent())
-            }
-        }
-                    
         // === STATUS DISPLAY ===
         let statusAnchor = AnchorEntity(.head)
         statusAnchor.name = "statusHeadAnchor"
@@ -1529,50 +1272,6 @@ struct CombinedStreamingView: View {
         if let statusPreviewAttachment = attachments.entity(for: "statusPreview") {
             statusPreviewAttachment.setParent(statusPreviewContainer)
             statusPreviewContainer.isEnabled = false
-        }
-        
-        // === VERIFICATION MARKER VISUALIZATION (Green) ===
-        let verificationMarkerRoot = Entity()
-        verificationMarkerRoot.name = "verificationMarkerRoot"
-        content.add(verificationMarkerRoot)
-        
-        let verificationMarker = Entity()
-        verificationMarker.name = "verificationMarker"
-        verificationMarker.isEnabled = false
-        verificationMarkerRoot.addChild(verificationMarker)
-        
-        // Green material for verification
-        var verMaterial = UnlitMaterial()
-        verMaterial.color = .init(tint: .green)
-        var verBoundaryMaterial = UnlitMaterial()
-        verBoundaryMaterial.color = .init(tint: UIColor(red: 0.0, green: 1.0, blue: 0.0, alpha: 0.8)) // Bright green
-        
-        // Origin
-        let verOrigin = ModelEntity(mesh: originMesh, materials: [verMaterial])
-        verOrigin.name = "origin"
-        verificationMarker.addChild(verOrigin)
-        
-        // Axes (same colors as others for consistency)
-        let verXAxis = ModelEntity(mesh: axisMesh, materials: [xMaterial])
-        verXAxis.transform.rotation = simd_quatf(angle: -.pi / 2, axis: [0, 0, 1])
-        verXAxis.position = [axisLength / 2, 0, 0]
-        verificationMarker.addChild(verXAxis)
-        
-        let verYAxis = ModelEntity(mesh: axisMesh, materials: [yMaterial])
-        verYAxis.position = [0, axisLength / 2, 0]
-        verificationMarker.addChild(verYAxis)
-        
-        let verZAxis = ModelEntity(mesh: axisMesh, materials: [zMaterial])
-        verZAxis.transform.rotation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-        verZAxis.position = [0, 0, axisLength / 2]
-        verificationMarker.addChild(verZAxis)
-        
-        // Boundary
-        let verBoundaryMesh = MeshResource.generateBox(width: 0.1, height: boundaryWidth, depth: boundaryWidth)
-        for j in 0..<4 {
-            let edge = ModelEntity(mesh: verBoundaryMesh, materials: [verBoundaryMaterial])
-            edge.name = "boundary_\(j)"
-            verificationMarker.addChild(edge)
         }
         
         // === ACCESSORY TRACKING (visionOS 26+) ===

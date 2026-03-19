@@ -72,7 +72,7 @@ class UVCCameraManager: NSObject, ObservableObject {
     // Frame callback for external consumers
     var onFrameReceived: ((UIImage) -> Void)?
     
-    // Raw pixel buffer callback for calibration and processing
+    // Raw pixel buffer callback for frame consumers and processing
     var onPixelBufferReceived: ((CVPixelBuffer) -> Void)?
     
     // MARK: - Initialization
@@ -342,7 +342,7 @@ extension UVCCameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
         
-        // Notify raw pixel buffer consumers (for calibration, etc.)
+        // Notify raw pixel buffer consumers
         // This runs on the capture queue, not main actor
         Task { @MainActor [pixelBuffer] in
             self.onPixelBufferReceived?(pixelBuffer)

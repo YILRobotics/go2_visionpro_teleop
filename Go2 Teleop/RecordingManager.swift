@@ -110,14 +110,11 @@ struct RecordingMetadata: Codable {
     let videoSource: String  // "network" or "uvc"
     let averageFPS: Double
     let deviceInfo: DeviceInfo
-    // Calibration data
-    let intrinsicCalibration: [String: Any]?
-    let extrinsicCalibration: [String: Any]?
     
     enum CodingKeys: String, CodingKey {
         case version, createdAt, duration, frameCount, hasVideo
         case hasLeftHand, hasRightHand, hasSimulationData, hasUSDZ, videoSource, averageFPS, deviceInfo
-        case intrinsicCalibration, extrinsicCalibration, recordingType
+        case recordingType
     }
     
     func encode(to encoder: Encoder) throws {
@@ -135,18 +132,6 @@ struct RecordingMetadata: Codable {
         try container.encode(videoSource, forKey: .videoSource)
         try container.encode(averageFPS, forKey: .averageFPS)
         try container.encode(deviceInfo, forKey: .deviceInfo)
-        // Encode intrinsic calibration as JSON data
-        if let intrinsic = intrinsicCalibration {
-            let jsonData = try JSONSerialization.data(withJSONObject: intrinsic, options: [])
-            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
-            try container.encode(jsonString, forKey: .intrinsicCalibration)
-        }
-        // Encode extrinsic calibration as JSON data
-        if let extrinsic = extrinsicCalibration {
-            let jsonData = try JSONSerialization.data(withJSONObject: extrinsic, options: [])
-            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
-            try container.encode(jsonString, forKey: .extrinsicCalibration)
-        }
     }
     
     init(from decoder: Decoder) throws {
@@ -164,27 +149,11 @@ struct RecordingMetadata: Codable {
         videoSource = try container.decode(String.self, forKey: .videoSource)
         averageFPS = try container.decode(Double.self, forKey: .averageFPS)
         deviceInfo = try container.decode(DeviceInfo.self, forKey: .deviceInfo)
-        // Decode intrinsic calibration from JSON string
-        if let jsonString = try container.decodeIfPresent(String.self, forKey: .intrinsicCalibration),
-           let jsonData = jsonString.data(using: .utf8),
-           let dict = try JSONSerialization.jsonObject(with: jsonData, options: []) as? [String: Any] {
-            intrinsicCalibration = dict
-        } else {
-            intrinsicCalibration = nil
-        }
-        // Decode extrinsic calibration from JSON string
-        if let jsonString = try container.decodeIfPresent(String.self, forKey: .extrinsicCalibration),
-           let jsonData = jsonString.data(using: .utf8),
-           let dict = try JSONSerialization.jsonObject(with: jsonData, options: []) as? [String: Any] {
-            extrinsicCalibration = dict
-        } else {
-            extrinsicCalibration = nil
-        }
     }
     
     init(createdAt: Date, duration: Double, frameCount: Int, hasVideo: Bool, hasLeftHand: Bool,
          hasRightHand: Bool, hasSimulationData: Bool, hasUSDZ: Bool, videoSource: String, averageFPS: Double,
-         deviceInfo: DeviceInfo, recordingType: RecordingType, intrinsicCalibration: [String: Any]? = nil, extrinsicCalibration: [String: Any]? = nil) {
+         deviceInfo: DeviceInfo, recordingType: RecordingType) {
         self.createdAt = createdAt
         self.duration = duration
         self.frameCount = frameCount
@@ -197,8 +166,6 @@ struct RecordingMetadata: Codable {
         self.averageFPS = averageFPS
         self.deviceInfo = deviceInfo
         self.recordingType = recordingType
-        self.intrinsicCalibration = intrinsicCalibration
-        self.extrinsicCalibration = extrinsicCalibration
     }
 }
 
@@ -983,22 +950,6 @@ class RecordingManager: ObservableObject {
             isWriterSessionStarted = false
             recordingFolderURL = nil
             
-            // Get extrinsic calibration if available
-            let extrinsicCalibrationDict: [String: Any]?
-            if let currentCalibration = ExtrinsicCalibrationManager.shared.currentCalibration {
-                extrinsicCalibrationDict = currentCalibration.toMetadataDictionary()
-            } else {
-                extrinsicCalibrationDict = nil
-            }
-            
-            // Get intrinsic calibration if available
-            let intrinsicCalibrationDict: [String: Any]?
-            if let currentIntrinsic = CameraCalibrationManager.shared.currentCalibration {
-                intrinsicCalibrationDict = currentIntrinsic.toMetadataDictionary()
-            } else {
-                intrinsicCalibrationDict = nil
-            }
-            
             // Determine actual frame count (use max of video and simulation frames)
             let actualFrameCount = max(recordedFrames.count, simulationFrames.count)
             
@@ -1041,9 +992,7 @@ class RecordingManager: ObservableObject {
                     systemVersion: UIDevice.current.systemVersion,
                     appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
                 ),
-                recordingType: recordingType,
-                intrinsicCalibration: intrinsicCalibrationDict,
-                extrinsicCalibration: extrinsicCalibrationDict
+                recordingType: recordingType
             )
             
             let metadataURL = recordingFolder.appendingPathComponent("metadata.json")
@@ -1112,9 +1061,7 @@ class RecordingManager: ObservableObject {
                 videoSource: metadata.videoSource,
                 averageFPS: metadata.averageFPS,
                 deviceInfo: metadata.deviceInfo,
-                recordingType: metadata.recordingType,
-                intrinsicCalibration: metadata.intrinsicCalibration,
-                extrinsicCalibration: metadata.extrinsicCalibration
+                recordingType: metadata.recordingType
             )
             
             // Re-save metadata with updated flags
