@@ -10,7 +10,6 @@ from typing import Dict, List, Optional
 import struct
 import math
 
-from ament_index_python.packages import get_package_share_directory
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
@@ -73,15 +72,22 @@ class VPStreamer(Node):
         self.declare_parameter("camera_mode", "robot")  # robot, realsense, both
         self.declare_parameter("enable_camera", True)
         self.declare_parameter("enable_audio", True)
-        self.declare_parameter("enable_pointcloud", True)
+        self.declare_parameter("enable_pointcloud", False)
         self.declare_parameter("pointcloud_topic", "/points_downsampled")
         self.declare_parameter("realsense_image_topic", "/camera/camera/color/image_raw")
         self.declare_parameter("controller_mode_enabled_on_startup", False)
         self.declare_parameter("controller_cmd_vel_topic", "/cmd_vel")
         self.declare_parameter("controller_head_delta_topic", "/teleop/head_delta_rpy")
         self.declare_parameter("controller_publish_hz", 30.0)
-        self.declare_parameter("controller_pinch_start_threshold", 0.025)
-        self.declare_parameter("controller_pinch_release_threshold", 0.035)
+        self.declare_parameter("controller_pinch_threshold", 0.025)
+        self.declare_parameter("controller_viz_scale", 1.0)
+        self.declare_parameter(
+            "controller_lpf_alpha",
+            1.0,
+            descriptor=ParameterDescriptor(
+                description="EMA low-pass alpha for controller outputs (0..1). 1.0 disables filtering. Applied to cmd_vel + controller visualization dots.",
+            ),
+        )
         self.declare_parameter("controller_max_delta_m", 0.20)
         self.declare_parameter("controller_deadzone", 0.05)
         self.declare_parameter("controller_linear_scale", 0.8)
@@ -157,10 +163,13 @@ class VPStreamer(Node):
         
         self._controller_publish_hz = max(1.0, float(params["controller_publish_hz"]))
         self._controller_publish_interval = 1.0 / self._controller_publish_hz
-        self._controller_pinch_start = float(params["controller_pinch_start_threshold"])
-        self._controller_pinch_release = float(params["controller_pinch_release_threshold"])
-        if self._controller_pinch_release <= self._controller_pinch_start:
-            self._controller_pinch_release = self._controller_pinch_start + 0.005
+        self._controller_pinch_threshold = float(params["controller_pinch_threshold"])
+        self._controller_viz_scale = float(params["controller_viz_scale"])
+        self._controller_lpf_alpha = float(np.clip(params["controller_lpf_alpha"], 0.0, 1.0))
+        self._controller_filt_dot_x = 0.0
+        self._controller_filt_dot_y = 0.0
+        self._controller_filt_cmd_linear_x = 0.0
+        self._controller_filt_cmd_angular_z = 0.0
         self._controller_max_delta_m = max(0.05, float(params["controller_max_delta_m"]))
         self._controller_deadzone = float(np.clip(params["controller_deadzone"], 0.0, 0.5))
         self._controller_linear_scale = float(params["controller_linear_scale"])
@@ -219,25 +228,25 @@ class VPStreamer(Node):
         self.streamer.register_control_callback(self._on_control_message)
         self.viewer_handle = None
         
-        if params["viewer"] == "ar":
+        # if params["viewer"] == "ar":
 
-            self.streamer.configure_mujoco(
-                xml_path=params["xml_path"],
-                model=self.model,
-                data=self.data,
-                relative_to=params["attach_to"],
-                grpc_port=params["port"],
-                force_reload=params["force_reload"],
-            )
+        #     self.streamer.configure_mujoco(
+        #         xml_path=params["xml_path"],
+        #         model=self.model,
+        #         data=self.data,
+        #         relative_to=params["attach_to"],
+        #         grpc_port=params["port"],
+        #         force_reload=params["force_reload"],
+        #     )
         
-        elif params["viewer"] == "mujoco":
-            try:
-                from mujoco import viewer as mj_viewer
+        # elif params["viewer"] == "mujoco":
+        #     try:
+        #         from mujoco import viewer as mj_viewer
 
-                self.viewer_handle = mj_viewer.launch_passive(self.model, self.data)
-                self.get_logger().info("Launched local MuJoCo viewer")
-            except Exception as exc:  # noqa: BLE001
-                self.get_logger().error(f"Failed to start local MuJoCo viewer: {exc}")
+        #         self.viewer_handle = mj_viewer.launch_passive(self.model, self.data)
+        #         self.get_logger().info("Launched local MuJoCo viewer")
+        #     except Exception as exc:  # noqa: BLE001
+        #         self.get_logger().error(f"Failed to start local MuJoCo viewer: {exc}")
                     
         if self.enable_camera:
             self.streamer.configure_video(
@@ -327,8 +336,9 @@ class VPStreamer(Node):
         controller_cmd_vel_topic = self.get_parameter("controller_cmd_vel_topic").value
         controller_head_delta_topic = self.get_parameter("controller_head_delta_topic").value
         controller_publish_hz = self.get_parameter("controller_publish_hz").value
-        controller_pinch_start_threshold = self.get_parameter("controller_pinch_start_threshold").value
-        controller_pinch_release_threshold = self.get_parameter("controller_pinch_release_threshold").value
+        controller_pinch_threshold = self.get_parameter("controller_pinch_threshold").value
+        controller_viz_scale = self.get_parameter("controller_viz_scale").value
+        controller_lpf_alpha = self.get_parameter("controller_lpf_alpha").value
         controller_max_delta_m = self.get_parameter("controller_max_delta_m").value
         controller_deadzone = self.get_parameter("controller_deadzone").value
         controller_linear_scale = self.get_parameter("controller_linear_scale").value
@@ -361,8 +371,9 @@ class VPStreamer(Node):
             "controller_cmd_vel_topic": controller_cmd_vel_topic,
             "controller_head_delta_topic": controller_head_delta_topic,
             "controller_publish_hz": controller_publish_hz,
-            "controller_pinch_start_threshold": controller_pinch_start_threshold,
-            "controller_pinch_release_threshold": controller_pinch_release_threshold,
+            "controller_pinch_threshold": controller_pinch_threshold,
+            "controller_viz_scale": controller_viz_scale,
+            "controller_lpf_alpha": controller_lpf_alpha,
             "controller_max_delta_m": controller_max_delta_m,
             "controller_deadzone": controller_deadzone,
             "controller_linear_scale": controller_linear_scale,
@@ -511,6 +522,10 @@ class VPStreamer(Node):
             self._controller_dot_x = 0.0
             self._controller_dot_y = 0.0
             self._controller_zero_pending = True
+            self._controller_filt_dot_x = 0.0
+            self._controller_filt_dot_y = 0.0
+            self._controller_filt_cmd_linear_x = 0.0
+            self._controller_filt_cmd_angular_z = 0.0
         self.get_logger().info(f"Controller mode {'enabled' if enabled else 'disabled'} from VisionOS")
     
     @staticmethod
@@ -572,18 +587,38 @@ class VPStreamer(Node):
         head_pitch: float,
         head_yaw: float,
     ) -> None:
-        self._publish_cmd_vel(cmd_linear_x, cmd_angular_z)
+        alpha = float(getattr(self, "_controller_lpf_alpha", 1.0))
+        if not enabled:
+            self._controller_filt_dot_x = 0.0
+            self._controller_filt_dot_y = 0.0
+            self._controller_filt_cmd_linear_x = 0.0
+            self._controller_filt_cmd_angular_z = 0.0
+        else:
+            self._controller_filt_dot_x = (1.0 - alpha) * self._controller_filt_dot_x + alpha * float(dot_x)
+            self._controller_filt_dot_y = (1.0 - alpha) * self._controller_filt_dot_y + alpha * float(dot_y)
+            self._controller_filt_cmd_linear_x = (1.0 - alpha) * self._controller_filt_cmd_linear_x + alpha * float(cmd_linear_x)
+            self._controller_filt_cmd_angular_z = (1.0 - alpha) * self._controller_filt_cmd_angular_z + alpha * float(cmd_angular_z)
+
+        cmd_linear_x_f = float(self._controller_filt_cmd_linear_x)
+        cmd_angular_z_f = float(self._controller_filt_cmd_angular_z)
+        dot_x_f = float(self._controller_filt_dot_x)
+        dot_y_f = float(self._controller_filt_dot_y)
+
+        self._publish_cmd_vel(cmd_linear_x_f, cmd_angular_z_f)
         self._publish_head_delta(head_roll, head_pitch, head_yaw)
         if self.streamer is not None:
+            viz_scale = getattr(self, "_controller_viz_scale", 1.0)
+            dot_x_viz = float(np.clip(dot_x_f * viz_scale, -1.0, 1.0))
+            dot_y_viz = float(np.clip(dot_y_f * viz_scale, -1.0, 1.0))
             self.streamer.send_control_message(
                 {
                     "type": "controller_state",
                     "enabled": bool(enabled),
                     "tracking_active": bool(tracking_active),
-                    "dot_x": float(dot_x),
-                    "dot_y": float(dot_y),
-                    "cmd_linear_x": float(cmd_linear_x),
-                    "cmd_angular_z": float(cmd_angular_z),
+                    "dot_x": dot_x_viz,
+                    "dot_y": dot_y_viz,
+                    "cmd_linear_x": cmd_linear_x_f,
+                    "cmd_angular_z": cmd_angular_z_f,
                     "head_delta_roll": float(head_roll),
                     "head_delta_pitch": float(head_pitch),
                     "head_delta_yaw": float(head_yaw),
@@ -661,10 +696,10 @@ class VPStreamer(Node):
             tracking_active = self._controller_tracking_active
             anchor = None if self._controller_anchor_wrist is None else self._controller_anchor_wrist.copy()
         
-        if not tracking_active and pinch_distance <= self._controller_pinch_start:
+        if not tracking_active and pinch_distance <= self._controller_pinch_threshold:
             tracking_active = True
             anchor = wrist_pos.copy()
-        elif tracking_active and pinch_distance >= self._controller_pinch_release:
+        elif tracking_active and pinch_distance > self._controller_pinch_threshold:
             tracking_active = False
             anchor = None
         
@@ -1245,7 +1280,6 @@ class VPStreamer(Node):
                 continue
 
     def _build_audio_chunk(self, num_samples: int) -> bytes:
-        sample_rate = 48000
         output = np.zeros(num_samples, dtype=np.float32)
 
         with self._audio_lock:

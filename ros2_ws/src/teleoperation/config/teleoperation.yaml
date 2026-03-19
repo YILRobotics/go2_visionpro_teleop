@@ -28,8 +28,9 @@ vp_streamer:
     controller_cmd_vel_topic: "/cmd_vel"
     controller_head_delta_topic: "/teleop/head_delta_rpy"
     controller_publish_hz: 30.0
-    controller_pinch_start_threshold: 0.02
-    controller_pinch_release_threshold: 0.028
+    controller_pinch_threshold: 0.008
+    controller_viz_scale: 2.0
+    controller_lpf_alpha: 0.25 # 1 = no filtering
     controller_max_delta_m: 0.20
     controller_deadzone: 0.05
     controller_linear_scale: 1.0

@@ -247,28 +247,28 @@ def generate_launch_description():
 
 
     nodes = [
-        static_transform_camera_lens_realsense,
-        realsense_launch,
-        realsense_description,
-        downsample_node,
-        # dummy_pointcloud_publisher_node, 
+        # static_transform_camera_lens_realsense,
+        # realsense_launch,
+        # realsense_description,
+        # downsample_node,
+        # # dummy_pointcloud_publisher_node, 
         
         vp_streamer_node,
 
 
-        robot_state_publisher_node,
-        # listen_real_node,  # disabled: teleop_control now owns the serial port and publishes /joint_states
+        # robot_state_publisher_node,
+        # # listen_real_node,  # disabled: teleop_control now owns the serial port and publishes /joint_states
 
         static_transform_map_mycobot_base,
         vp_transform_publisher_node,
-        static_transform_map_vp_base_origin,
+        # static_transform_map_vp_base_origin,
 
-        teleop_control_cpp_node,
-        inverse_kinematics_node,
+        # teleop_control_cpp_node,
+        # inverse_kinematics_node,
         
-        rviz2_node,
+        # rviz2_node,
                         
-        joint_state_to_mycobot_node,
+        # joint_state_to_mycobot_node,
     ]
 
     return LaunchDescription(nodes)
