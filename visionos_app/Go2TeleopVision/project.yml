@@ -19,6 +19,8 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Go2TeleopVision
         INFOPLIST_KEY_NSHandsTrackingUsageDescription: Hand tracking is used to teleoperate Go2.
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: Go2TeleopVision connects to a local Go2 teleop backend on your network.
+        INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         PRODUCT_NAME: Go2TeleopVision
 schemes:

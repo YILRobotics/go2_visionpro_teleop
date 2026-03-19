@@ -82,6 +82,9 @@ class Go2TeleopApp:
             self._setup_vision_stream()
             return
 
+        LOGGER.info(
+            "Input source is 'swift': --vision-pro-ip is ignored. Configure Vision Pro app endpoints to use this Mac's IP."
+        )
         self._swift_bridge = SwiftBridgeServer(
             bind_host=self.cfg.swift_bind_host,
             ws_port=self.cfg.swift_ws_port,
@@ -121,13 +124,25 @@ class Go2TeleopApp:
         try:
             VisionProStreamer = _load_vision_pro_streamer()
         except ModuleNotFoundError as exc:
+            missing = getattr(exc, "name", None)
+            if missing and missing != "avp_stream":
+                raise ModuleNotFoundError(
+                    f"Could not import AVP runtime dependency '{missing}'. "
+                    "If you are using local visionProTeleop checkout, install runtime deps without mujoco: "
+                    "`python3.11 -m pip install grpcio protobuf aiortc av scipy`."
+                ) from exc
             raise ModuleNotFoundError(
-                "Could not import avp_stream. Install AVP extras with "
-                "`python3 -m pip install -e \".[avp]\"` or keep visionProTeleop next to this repo."
+                "Could not import avp_stream. Keep visionProTeleop next to this repo, "
+                "or install AVP extras in a compatible Python environment."
             ) from exc
 
         if not self.cfg.vision_pro_ip:
             raise ValueError("--vision-pro-ip is required for AVP input mode.")
+        if self.cfg.vision_pro_ip == "192.168.10.253":
+            LOGGER.warning(
+                "Using default --vision-pro-ip=%s. Replace with your actual Vision Pro IP if connection fails.",
+                self.cfg.vision_pro_ip,
+            )
 
         self._streamer = VisionProStreamer(
             ip=self.cfg.vision_pro_ip,

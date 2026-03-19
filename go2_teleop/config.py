@@ -107,7 +107,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--vision-pro-ip",
-        default=None,
+        default="192.168.10.253",
+#        default="192.254.67.123",
         help="Vision Pro IP address (or Tracking Streamer room code in cross-network mode).",
     )
     parser.add_argument("--webrtc-port", type=int, default=9999, help="Local WebRTC offer port.")

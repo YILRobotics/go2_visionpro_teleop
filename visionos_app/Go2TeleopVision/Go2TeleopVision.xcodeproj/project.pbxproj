@@ -20,7 +20,7 @@
 		6A1912514B3A8A2CC164AA54 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		85B3EDB0CE5053612FD53C89 /* HandTrackingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandTrackingService.swift; sourceTree = "<group>"; };
 		B8E6412A9A875423A724E621 /* TeleopSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeleopSocketClient.swift; sourceTree = "<group>"; };
-		C35DA37BF4A6BA75F71C7F9E /* Go2TeleopVision.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Go2TeleopVision.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C35DA37BF4A6BA75F71C7F9E /* Go2TeleopVision.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Go2TeleopVision.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E415699F86156E844835A454 /* Go2TeleopVisionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Go2TeleopVisionApp.swift; sourceTree = "<group>"; };
 		E9CE42C940277FABA0462F6F /* TeleopModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeleopModels.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -131,8 +131,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = D5E589FF64F149EE28910CF6 /* Build configuration list for PBXProject "Go2TeleopVision" */;
 			developmentRegion = en;
@@ -174,9 +172,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				DEVELOPMENT_TEAM = ZZ5RF4AK96;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Go2TeleopVision;
-				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Hand tracking is used to teleoperate Go2.";
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Hand tracking is used to teleoperate Unitree Go2.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Go2TeleopVision connects to a local Go2 teleop backend on your network.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -186,7 +188,7 @@
 				PRODUCT_NAME = Go2TeleopVision;
 				SDKROOT = xros;
 				TARGETED_DEVICE_FAMILY = 7;
-				XROS_DEPLOYMENT_TARGET = 1.0;
+				XROS_DEPLOYMENT_TARGET = 2.6;
 			};
 			name = Release;
 		};
@@ -315,9 +317,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				DEVELOPMENT_TEAM = ZZ5RF4AK96;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Go2TeleopVision;
-				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Hand tracking is used to teleoperate Go2.";
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Hand tracking is used to teleoperate Unitree Go2.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Go2TeleopVision connects to a local Go2 teleop backend on your network.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -327,7 +333,7 @@
 				PRODUCT_NAME = Go2TeleopVision;
 				SDKROOT = xros;
 				TARGETED_DEVICE_FAMILY = 7;
-				XROS_DEPLOYMENT_TARGET = 1.0;
+				XROS_DEPLOYMENT_TARGET = 2.6;
 			};
 			name = Debug;
 		};

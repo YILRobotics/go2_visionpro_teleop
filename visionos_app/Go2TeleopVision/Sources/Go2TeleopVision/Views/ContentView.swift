@@ -120,16 +120,19 @@ struct ContentView: View {
                     Image(systemName: "wifi")
                         .font(.caption)
                         .foregroundColor(.blue)
-                    Text("Local Network")
+                    Text("Vision Pro Network")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.white.opacity(0.7))
                     InfoTooltipButton(
-                        title: "Local Mode",
-                        message: "Use this when Vision Pro and the Go2 backend are on the same network."
+                        title: "Vision Pro IPs",
+                        message: "These are Vision Pro interface IPs. In Connection Settings, use your Mac/backend LAN IP for ws:// and http:// endpoints."
                     )
                 }
 
                 IPAddressCard(addresses: viewModel.localIPAddresses)
+                Text("Enter your Mac/backend IP in Connection Settings.")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.55))
 
                 HStack(spacing: 8) {
                     Circle()

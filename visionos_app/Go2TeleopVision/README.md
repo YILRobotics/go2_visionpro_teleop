@@ -43,6 +43,9 @@ xcodegen generate
 
 The lobby lets you edit these before pressing `START`.
 
+Use the backend Mac/robot LAN IP for `<robot-host>` (for example `192.168.1.20`).
+Do not use `0.0.0.0`, `127.0.0.1`, `localhost`, or the Vision Pro device IP.
+
 ## Backend Command
 
 Run Python backend in Swift-input mode:

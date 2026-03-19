@@ -14,7 +14,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-avp = ["avp_stream>=2.50.0"]
+avp = [
+  "grpcio>=1.60",
+  "protobuf>=4.25",
+  "aiortc>=1.8",
+  "av>=11.0",
+  "scipy>=1.11",
+]
 
 [project.scripts]
 go2-teleop = "go2_teleop.main:main"

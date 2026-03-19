@@ -110,6 +110,15 @@ For AVP input mode (Tracking Streamer compatible), install optional extras:
 python3 -m pip install -e ".[avp]"
 ```
 
+If your default `python3` is 3.14 and AVP dependencies fail to build, use Python 3.11:
+
+```bash
+python3.11 -m venv .venv311
+source .venv311/bin/activate
+python -m pip install -U pip setuptools wheel
+python -m pip install -e ".[avp]"
+```
+
 2. Run teleop:
 
 ```bash
@@ -126,6 +135,12 @@ Then in `Go2TeleopVision`:
 - set WebSocket to `ws://<robot-host>:8765/ws`
 - set Snapshot to `http://<robot-host>:8080/snapshot.jpg`
 - press `START`
+
+Important:
+
+- `<robot-host>` must be the backend Mac/robot IP on your LAN (for example `192.168.1.20`)
+- do not use `0.0.0.0`, `127.0.0.1`, `localhost`, or the Vision Pro device IP in backend config for `--input-source swift`
+- `--vision-pro-ip` is only used with `--input-source avp`
 
 ## Simple Simulation Mode (Red Block)
 

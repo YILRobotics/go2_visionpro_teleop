@@ -65,6 +65,11 @@ final class TeleopViewModel: ObservableObject {
             errorText = "Invalid snapshot URL."
             return
         }
+        if let endpointValidationError = validateEndpointHosts(wsURL: wsURL, snapshotURL: snapshotURL) {
+            errorText = endpointValidationError
+            statusText = "Idle"
+            return
+        }
 
         isStarting = true
         errorText = nil
@@ -246,6 +251,27 @@ final class TeleopViewModel: ObservableObject {
 
     private func refreshLocalNetworkInfo() {
         localIPAddresses = getIPAddresses()
+    }
+
+    private func validateEndpointHosts(wsURL: URL, snapshotURL: URL) -> String? {
+        guard let wsHost = wsURL.host, let snapshotHost = snapshotURL.host else {
+            return "WebSocket and snapshot URLs must include a host IP."
+        }
+
+        #if targetEnvironment(simulator)
+        let allowLoopbackHosts = true
+        #else
+        let allowLoopbackHosts = false
+        #endif
+
+        if !allowLoopbackHosts {
+            let blockedHosts: Set<String> = ["127.0.0.1", "localhost", "0.0.0.0", "::1", "::"]
+            if blockedHosts.contains(wsHost.lowercased()) || blockedHosts.contains(snapshotHost.lowercased()) {
+                return "On Vision Pro, use your Mac's LAN IP in both URLs (for example 192.168.x.x), not localhost/127.0.0.1/0.0.0.0."
+            }
+        }
+
+        return nil
     }
 }
 

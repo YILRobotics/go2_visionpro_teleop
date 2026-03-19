@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import logging
+import socket
 import threading
 import time
 from http import HTTPStatus
@@ -47,17 +49,37 @@ class SwiftBridgeServer:
         self._ws_thread: Optional[threading.Thread] = None
         self._ws_ready = threading.Event()
         self._ws_start_error: Optional[Exception] = None
+        self._received_first_tracking = False
 
     def start(self) -> None:
         self._start_http_server()
         self._start_ws_server()
         LOGGER.info(
-            "Swift bridge ready: ws://%s:%d/ws, http://%s:%d/snapshot.jpg",
+            "Swift bridge bound: ws://%s:%d/ws, http://%s:%d/snapshot.jpg",
             self.bind_host,
             self.ws_port,
             self.bind_host,
             self.http_port,
         )
+        if _is_wildcard_host(self.bind_host):
+            lan_ips = _local_ipv4_addresses()
+            if lan_ips:
+                primary = lan_ips[0]
+                LOGGER.info(
+                    "Connect Vision Pro to your Mac LAN IP (not 0.0.0.0). Example: ws://%s:%d/ws and http://%s:%d/snapshot.jpg",
+                    primary,
+                    self.ws_port,
+                    primary,
+                    self.http_port,
+                )
+                if len(lan_ips) > 1:
+                    LOGGER.info("Detected Mac LAN IPv4 addresses: %s", ", ".join(lan_ips))
+            else:
+                LOGGER.info(
+                    "Connect Vision Pro using this Mac's LAN IP: ws://<mac-ip>:%d/ws and http://<mac-ip>:%d/snapshot.jpg",
+                    self.ws_port,
+                    self.http_port,
+                )
 
     def stop(self) -> None:
         if self._http_server is not None:
@@ -149,6 +171,7 @@ class SwiftBridgeServer:
             asyncio.set_event_loop(loop)
 
             async def handler(websocket, path: Optional[str] = None) -> None:
+                peer = getattr(websocket, "remote_address", None)
                 request = getattr(websocket, "request", None)
                 request_path = getattr(request, "path", None)
                 path = path or getattr(websocket, "path", None) or request_path or "/ws"
@@ -158,8 +181,10 @@ class SwiftBridgeServer:
                     except Exception:
                         pass
                     return
+                LOGGER.info("Swift app websocket connected from %s.", peer)
                 async for message in websocket:
                     await self._on_ws_message(message, websocket)
+                LOGGER.info("Swift app websocket disconnected from %s.", peer)
 
             try:
                 async def create_server():
@@ -213,6 +238,9 @@ class SwiftBridgeServer:
         with self._latest_tracking_lock:
             self._latest_tracking = tracking
             self._latest_tracking_ts = time.monotonic()
+        if not self._received_first_tracking:
+            self._received_first_tracking = True
+            LOGGER.info("Received first tracking packet from Swift app.")
 
         try:
             await websocket.send('{"type":"ack"}')
@@ -241,3 +269,55 @@ def _packet_to_tracking(payload: dict[str, Any]) -> Optional[dict[str, Any]]:
         "right_pinch_distance": pinch_distance,
         "right_wrist_roll": roll,
     }
+
+
+def _is_wildcard_host(host: str) -> bool:
+    return host in {"0.0.0.0", "::", ""}
+
+
+def _local_ipv4_addresses() -> list[str]:
+    addresses: set[str] = set()
+
+    # Prefer the outbound interface address, which is usually the active LAN interface.
+    sock: Optional[socket.socket] = None
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect(("8.8.8.8", 80))
+        outbound_ip = sock.getsockname()[0]
+        if outbound_ip and not outbound_ip.startswith("127."):
+            addresses.add(outbound_ip)
+    except Exception:
+        pass
+    finally:
+        if sock is not None:
+            try:
+                sock.close()
+            except Exception:
+                pass
+
+    # Add host-resolved IPv4 addresses as fallbacks.
+    try:
+        for family, _, _, _, sockaddr in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            if family != socket.AF_INET:
+                continue
+            ip = sockaddr[0]
+            if ip and not ip.startswith("127."):
+                addresses.add(ip)
+    except Exception:
+        pass
+
+    return sorted(addresses, key=_ipv4_sort_key)
+
+
+def _ipv4_sort_key(ip: str) -> tuple[int, int]:
+    try:
+        addr = ipaddress.IPv4Address(ip)
+    except Exception:
+        return (3, 0)
+    if addr.is_link_local:
+        priority = 2
+    elif addr.is_private:
+        priority = 0
+    else:
+        priority = 1
+    return (priority, int(addr))
