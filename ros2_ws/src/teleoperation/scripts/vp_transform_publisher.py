@@ -147,7 +147,7 @@ class VPTransformPublisher(Node):
     def __init__(self):
         super().__init__("vp_transform_publisher")
 
-        self.declare_parameter("visionpro_ip", "192.168.50.153")
+        self.declare_parameter("visionpro_ip", "192.168.10.253")
         self.declare_parameter("pinch_threshold", 0.02)
         self.declare_parameter("rate_hz", 60.0)
 

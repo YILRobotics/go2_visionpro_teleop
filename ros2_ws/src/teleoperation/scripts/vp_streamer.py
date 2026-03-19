@@ -57,7 +57,7 @@ class VPStreamer(Node):
             "ar",
             descriptor=ParameterDescriptor(description="Viewer type: 'ar' to stream to Vision Pro, 'mujoco' for local preview.",),
         )
-        self.declare_parameter("visionpro_ip", "192.168.11.99")
+        self.declare_parameter("visionpro_ip", "192.168.10.253")
         self.declare_parameter("port", 50051)
         self.declare_parameter("joint_state_topic", "/joint_states")
         self.declare_parameter(

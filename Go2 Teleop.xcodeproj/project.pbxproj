@@ -170,7 +170,6 @@
 			children = (
 				16267B532B57D387000CA8AD /* README.md */,
 				165ADB492B4B71B0008A756F /* Go2 Teleop */,
-				C1EAFA2B2EDCF63F00549580 /* Frameworks */,
 				165ADB482B4B71B0008A756F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -234,13 +233,6 @@
 				C1EAF9702ED7E66600549580 /* MuJoCoStreamingView.swift */,
 			);
 			path = MuJoCo;
-			sourceTree = "<group>";
-		};
-		C1EAFA2B2EDCF63F00549580 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		C1GRPC032B93C1AC00F2269D /* Proto */ = {

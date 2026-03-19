@@ -210,6 +210,7 @@ struct StatusOverlay: View {
             }
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: isMinimized)
             
+            //////// Display Controller Graphic code here
             if dataManager.controllerHudVisible {
                 VStack(spacing: 8) {
                     ZStack {
@@ -249,7 +250,8 @@ struct StatusOverlay: View {
                         .stroke(Color.white.opacity(0.12), lineWidth: 1)
                 )
                 .cornerRadius(14)
-                .padding(10)
+                .padding(.trailing, 10)
+                .padding(.bottom, isMinimized ? 120 : 10)
             }
         }
         .onAppear {
@@ -549,6 +551,27 @@ struct StatusOverlay: View {
                         }
                     }
                     .buttonStyle(.plain)
+
+                    // Controller mode button
+                    if onControllerModeChanged != nil {
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                controllerModeBinding.wrappedValue.toggle()
+                            }
+                        } label: {
+                            ZStack {
+                                Circle()
+                                    .fill(dataManager.controllerModeEnabled ? Color.green.opacity(0.85) : Color.gray.opacity(0.6))
+                                    .frame(width: 60, height: 60)
+                                Image(systemName: "gamecontroller.fill")
+                                    .font(.system(size: 24, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!dataManager.controlChannelReady)
+                        .opacity(dataManager.controlChannelReady ? 1.0 : 0.5)
+                    }
                     
                     // Video minimize/maximize button (only show if video streaming mode is enabled)
                     if showVideoStatus {

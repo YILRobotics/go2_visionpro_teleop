@@ -9,6 +9,7 @@ struct Go2TeleopApp: App {
         WindowGroup {
             ContentView()
         }
+        .windowStyle(.plain)
         .windowResizability(.contentSize)
         
         // Hand tracking view (existing)
