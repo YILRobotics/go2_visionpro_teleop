@@ -2,12 +2,12 @@
 VisionProTeleop Unitree Go2 
 
 
-### Modified Mycobot reop and app to work with Unitree Go2
+## Modified Mycobot reop and app to work with Unitree Go2
 
 
 ===========
 
-
+## Old Version of the Repo:
 
 ### This is an enhanced version of the VisionProTeleop Streamer Repo which integrates ROS2 for: MyCobot 280 M5 with Gripper and Camera for Teleoperation, ROS2 Realsense RGB Pointlcoud and additional features in the TrackingStreamer App
 

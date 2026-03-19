@@ -5,8 +5,6 @@ import AVFoundation
 import GRPCCore
 import GRPCNIOTransportHTTP2
 import GRPCProtobuf
-import PhotosUI
-import UniformTypeIdentifiers
 
 /// Protocol for MuJoCo manager to allow StatusOverlay to display status
 @MainActor
@@ -127,7 +125,6 @@ enum ExpandedPanel: Equatable {
     case positionLayout  // Combined video view + controller position
     case handTracking  // Hand tracking configuration (prediction, etc.)
     case stereoBaseline  // Stereo IPD/baseline adjustment
-    case markerDetection  // ArUco marker detection settings
     case accessoryTracking  // Spatial controller tracking (visionOS 26+)
     case usdzCache  // USDZ scene cache management
 }
@@ -1774,22 +1771,7 @@ struct StatusOverlay: View {
                 }
             }
             
-            // Marker Detection (Teleop mode only)
             if appMode == .teleop {
-                let markerManager = MarkerDetectionManager.shared
-                menuItem(
-                    icon: markerManager.isEnabled ? "viewfinder.circle.fill" : "viewfinder.circle",
-                    title: "Marker Detection",
-                    subtitle: markerManager.isEnabled ? "\(markerManager.detectedMarkers.count) detected" : "Off",
-                    isExpanded: false,
-                    accentColor: .orange,
-                    iconColor: markerManager.isEnabled ? .green : nil
-                ) {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                        expandedPanel = .markerDetection
-                    }
-                }
-                
                 // USDZ Cache (Teleop mode - for MuJoCo/Isaac sim scenes)
                 let cacheManager = UsdzCacheManager.shared
                 menuItem(
@@ -1845,8 +1827,6 @@ struct StatusOverlay: View {
                 handTrackingPanelContent
             case .stereoBaseline:
                 stereoBaselinePanelContent
-            case .markerDetection:
-                markerDetectionPanelContent
             case .usdzCache:
                 usdzCachePanelContent
             case .accessoryTracking:
@@ -1872,7 +1852,6 @@ struct StatusOverlay: View {
         case .visualizations: return "Visualizations"
         case .handTracking: return "Hand Tracking"
         case .stereoBaseline: return "Stereo Baseline"
-        case .markerDetection: return "Marker Detection"
         case .usdzCache: return "USDZ Cache"
         case .accessoryTracking: return "Accessory Tracking"
         case .none: return ""
@@ -3156,121 +3135,6 @@ struct StatusOverlay: View {
         }
     }
     
-    // MARK: - Marker Detection Panel
-    
-    @ObservedObject private var markerDetectionManager = MarkerDetectionManager.shared
-    
-    private var markerDetectionPanelContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Description
-            Text("Detect ArUco markers and stream their world poses to Python. Enable to track printed markers with your Vision Pro camera.")
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.6))
-                .fixedSize(horizontal: false, vertical: true)
-            
-            Divider()
-                .background(Color.white.opacity(0.2))
-            
-            // Enable toggle
-            Toggle(isOn: $markerDetectionManager.isEnabled) {
-                HStack(spacing: 8) {
-                    Image(systemName: markerDetectionManager.isEnabled ? "viewfinder.circle.fill" : "viewfinder.circle")
-                        .font(.system(size: 16))
-                        .foregroundColor(markerDetectionManager.isEnabled ? .green : .white.opacity(0.6))
-                    Text("Enable Detection")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(.white)
-                }
-            }
-            .tint(.green)
-            
-            // Status
-            if markerDetectionManager.isEnabled {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(markerDetectionManager.detectedMarkers.isEmpty ? Color.orange : Color.green)
-                        .frame(width: 8, height: 8)
-                    Text(markerDetectionManager.statusMessage)
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.7))
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(8)
-            }
-            
-            Divider()
-                .background(Color.white.opacity(0.2))
-            
-            // Marker size slider
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Expected Marker Size")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(.white)
-                    Spacer()
-                    Text(String(format: "%.0f cm", markerDetectionManager.markerSizeMeters * 100))
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                        .monospacedDigit()
-                }
-                
-                Slider(value: $markerDetectionManager.markerSizeMeters, in: 0.02...0.50, step: 0.01)
-                    .tint(.orange)
-                
-                Text("Set this to match your printed marker's physical size for best tracking accuracy.")
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.5))
-            }
-            
-            // Detected markers list with estimated size
-            if !markerDetectionManager.detectedMarkers.isEmpty {
-                Divider()
-                    .background(Color.white.opacity(0.2))
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Detected Markers")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(.white.opacity(0.7))
-                    
-                    ForEach(Array(markerDetectionManager.detectedMarkers.keys.sorted()), id: \.self) { markerId in
-                        if let marker = markerDetectionManager.detectedMarkers[markerId] {
-                            HStack(spacing: 12) {
-                                Image(systemName: "qrcode.viewfinder")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.orange)
-                                Text("ID \(markerId)")
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.white)
-                                Spacer()
-                                Text(String(format: "~%.1f cm", marker.estimatedSizeMeters * 100))
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
-                                    .fontWeight(.medium)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.white.opacity(0.05))
-                            .cornerRadius(6)
-                        }
-                    }
-                }
-            }
-            
-            Divider()
-                .background(Color.white.opacity(0.2))
-            
-            // Custom Images section
-            customImagesSection
-        }
-    }
-    
     // MARK: - USDZ Cache Panel Content
     
     private var usdzCachePanelContent: some View {
@@ -3524,238 +3388,6 @@ struct StatusOverlay: View {
                     .foregroundColor(.white.opacity(0.5))
             }
         }
-    }
-    
-    // MARK: - Custom Images Section
-    
-    @State private var showingPhotoPicker = false
-    @State private var showingFileImporter = false
-    @State private var selectedPhotoItem: PhotosPickerItem? = nil
-    @State private var editingCustomImageId: String? = nil
-    @State private var editingCustomImageName: String = ""
-    @State private var editingCustomImageWidth: Float = 0.1
-    
-    @ViewBuilder
-    private var customImagesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header with add buttons
-            HStack {
-                Text("Custom Images")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.white.opacity(0.7))
-                
-                Spacer()
-                
-                // Add from Photos
-                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "photo.badge.plus")
-                            .font(.system(size: 12))
-                        Text("Photos")
-                            .font(.caption)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.blue.opacity(0.3))
-                    .cornerRadius(6)
-                    .foregroundColor(.blue)
-                }
-                .onChange(of: selectedPhotoItem) { oldItem, newItem in
-                    Task {
-                        if let item = newItem,
-                           let data = try? await item.loadTransferable(type: Data.self),
-                           let image = UIImage(data: data) {
-                            await MainActor.run {
-                                let name = "Image \(CustomImageStorage.shared.registrations.count + 1)"
-                                _ = CustomImageStorage.shared.registerImage(image, name: name)
-                            }
-                        }
-                        selectedPhotoItem = nil
-                    }
-                }
-                
-                // Add from Files
-                Button {
-                    showingFileImporter = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 12))
-                        Text("Files")
-                            .font(.caption)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.purple.opacity(0.3))
-                    .cornerRadius(6)
-                    .foregroundColor(.purple)
-                }
-            }
-            
-            // Registered images list
-            let registrations = CustomImageStorage.shared.registrations
-            if registrations.isEmpty {
-                Text("No custom images registered. Add images to track any picture in your environment.")
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.4))
-                    .padding(.vertical, 8)
-            } else {
-                ForEach(registrations) { registration in
-                    customImageRow(registration: registration)
-                }
-            }
-        }
-        .fileImporter(
-            isPresented: $showingFileImporter,
-            allowedContentTypes: [.image],
-            allowsMultipleSelection: false
-        ) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first,
-                   url.startAccessingSecurityScopedResource(),
-                   let data = try? Data(contentsOf: url),
-                   let image = UIImage(data: data) {
-                    let name = url.deletingPathExtension().lastPathComponent
-                    _ = CustomImageStorage.shared.registerImage(image, name: name)
-                    url.stopAccessingSecurityScopedResource()
-                }
-            case .failure(let error):
-                dlog("❌ [StatusView] File import failed: \(error)")
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private func customImageRow(registration: CustomImageRegistration) -> some View {
-        let isTracked = markerDetectionManager.trackedCustomImages[registration.id] != nil ||
-                        markerDetectionManager.fixedCustomImages[registration.id] != nil
-        
-        HStack(spacing: 10) {
-            // Thumbnail
-            if let thumbnail = CustomImageStorage.shared.loadThumbnail(for: registration, size: CGSize(width: 40, height: 40)) {
-                Image(uiImage: thumbnail)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 36, height: 36)
-                    .cornerRadius(4)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(isTracked ? Color.green : Color.white.opacity(0.2), lineWidth: 1)
-                    )
-            } else {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 36, height: 36)
-                    .overlay(
-                        Image(systemName: "photo")
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray)
-                    )
-            }
-            
-            // Name and size (editable)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(registration.name)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                
-                HStack(spacing: 4) {
-                    Text(String(format: "%.0f cm", registration.physicalWidthMeters * 100))
-                        .font(.caption2)
-                        .foregroundColor(.cyan)
-                    
-                    if isTracked {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 6, height: 6)
-                        Text("Tracking")
-                            .font(.caption2)
-                            .foregroundColor(.green)
-                    }
-                }
-            }
-            
-            Spacer()
-            
-            // Edit button
-            Button {
-                editingCustomImageId = registration.id
-                editingCustomImageName = registration.name
-                editingCustomImageWidth = registration.physicalWidthMeters
-            } label: {
-                Image(systemName: "pencil.circle")
-                    .font(.system(size: 18))
-                    .foregroundColor(.white.opacity(0.5))
-            }
-            .buttonStyle(.plain)
-            
-            // Delete button
-            Button {
-                CustomImageStorage.shared.unregisterImage(id: registration.id)
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(.red.opacity(0.6))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color.white.opacity(0.05))
-        .cornerRadius(8)
-        .sheet(isPresented: Binding(
-            get: { editingCustomImageId == registration.id },
-            set: { if !$0 { editingCustomImageId = nil } }
-        )) {
-            customImageEditSheet(registration: registration)
-        }
-    }
-    
-    @ViewBuilder
-    private func customImageEditSheet(registration: CustomImageRegistration) -> some View {
-        NavigationView {
-            Form {
-                Section("Image Name") {
-                    TextField("Name", text: $editingCustomImageName)
-                }
-                
-                Section("Physical Width") {
-                    HStack {
-                        Slider(value: $editingCustomImageWidth, in: 0.02...0.50, step: 0.01)
-                        Text(String(format: "%.0f cm", editingCustomImageWidth * 100))
-                            .frame(width: 60)
-                            .monospacedDigit()
-                    }
-                    Text("Enter the real-world width of this image for accurate tracking.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .navigationTitle("Edit Image")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        editingCustomImageId = nil
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        CustomImageStorage.shared.updateRegistration(
-                            id: registration.id,
-                            name: editingCustomImageName,
-                            physicalWidth: editingCustomImageWidth
-                        )
-                        editingCustomImageId = nil
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium])
     }
     
 }

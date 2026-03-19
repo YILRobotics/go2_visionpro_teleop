@@ -25,14 +25,12 @@
 		16EA6A632B68629200A3A740 /* screenshot1280w2.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 16EA6A602B68629100A3A740 /* screenshot1280w2.jpg */; };
 		16EE5E992B576DA800D354ED /* 🧩Name.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16EE5E982B576DA800D354ED /* 🧩Name.swift */; };
 		16EE5E9B2B576DB000D354ED /* 🧩Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16EE5E9A2B576DB000D354ED /* 🧩Model.swift */; };
-		C14B98622EEB86D2000B78D8 /* MarkerDetectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C14B98612EEB86D2000B78D8 /* MarkerDetectionManager.swift */; };
 		C14DAF532B7C375D00A7333E /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = C14DAF522B7C375D00A7333E /* GRPCCore */; };
 		C14DAF632B7C375D00A7333E /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = C14DAF622B7C375D00A7333E /* GRPCNIOTransportHTTP2 */; };
 		C14DAF732B7C375D00A7333E /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = C14DAF722B7C375D00A7333E /* GRPCProtobuf */; };
 		C1893C762B93C1AC00F2269D /* handtracking.grpc.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1893C742B93C1AC00F2269D /* handtracking.grpc.swift */; };
 		C1893C772B93C1AC00F2269D /* handtracking.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1893C752B93C1AC00F2269D /* handtracking.pb.swift */; settings = {COMPILER_FLAGS = "-suppress-warnings"; }; };
 		C1B6715F2EE68D4000574B6F /* PersonaCaptureController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1B6715E2EE68D4000574B6F /* PersonaCaptureController.swift */; };
-		C1C7672D2EF1CBB90020844F /* CustomImageStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C7672C2EF1CBB90020844F /* CustomImageStorage.swift */; };
 		C1C7672F2EF1F0E20020844F /* AccessoryTrackingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C7672E2EF1F0E20020844F /* AccessoryTrackingManager.swift */; };
 		C1C767312EF220010020844F /* SignalingClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C767302EF220010020844F /* SignalingClient.swift */; };
 		C1DA80C42ECE377600B55CC2 /* StatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1DA80C32ECE377600B55CC2 /* StatusView.swift */; };
@@ -50,8 +48,6 @@
 		C1EAF9772ED7EC9000549580 /* CombinedStreamingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1EAF9762ED7EC9000549580 /* CombinedStreamingView.swift */; };
 		C1EAF9792EDBA73600549580 /* UVCCameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1EAF9782EDBA73600549580 /* UVCCameraManager.swift */; };
 		C1EAF97F2EDBB9C700549580 /* RecordingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1EAF97E2EDBB9C700549580 /* RecordingManager.swift */; };
-		C1EAFA222EDCF22A00549580 /* OpenCVWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = C1EAFA202EDCF22A00549580 /* OpenCVWrapper.mm */; };
-		C1EAFA352EDCF80A00549580 /* opencv2.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = C1EAFA342EDCF80A00549580 /* opencv2.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -94,11 +90,9 @@
 		16EE5E962B576B9F00D354ED /* HandToGround.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = HandToGround.md; sourceTree = "<group>"; };
 		16EE5E982B576DA800D354ED /* 🧩Name.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "🧩Name.swift"; sourceTree = "<group>"; };
 		16EE5E9A2B576DB000D354ED /* 🧩Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "🧩Model.swift"; sourceTree = "<group>"; };
-		C14B98612EEB86D2000B78D8 /* MarkerDetectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkerDetectionManager.swift; sourceTree = "<group>"; };
 		C1893C742B93C1AC00F2269D /* handtracking.grpc.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = handtracking.grpc.swift; sourceTree = "<group>"; };
 		C1893C752B93C1AC00F2269D /* handtracking.pb.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = handtracking.pb.swift; sourceTree = "<group>"; };
 		C1B6715E2EE68D4000574B6F /* PersonaCaptureController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaCaptureController.swift; sourceTree = "<group>"; };
-		C1C7672C2EF1CBB90020844F /* CustomImageStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomImageStorage.swift; sourceTree = "<group>"; };
 		C1C7672E2EF1F0E20020844F /* AccessoryTrackingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessoryTrackingManager.swift; sourceTree = "<group>"; };
 		C1C767302EF220010020844F /* SignalingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalingClient.swift; sourceTree = "<group>"; };
 		C1DA80C32ECE377600B55CC2 /* StatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusView.swift; sourceTree = "<group>"; };
@@ -116,9 +110,6 @@
 		C1EAF9762ED7EC9000549580 /* CombinedStreamingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CombinedStreamingView.swift; sourceTree = "<group>"; };
 		C1EAF9782EDBA73600549580 /* UVCCameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UVCCameraManager.swift; sourceTree = "<group>"; };
 		C1EAF97E2EDBB9C700549580 /* RecordingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingManager.swift; sourceTree = "<group>"; };
-		C1EAFA1F2EDCF22A00549580 /* OpenCVWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = OpenCVWrapper.h; sourceTree = "<group>"; };
-		C1EAFA202EDCF22A00549580 /* OpenCVWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = OpenCVWrapper.mm; sourceTree = "<group>"; };
-		C1EAFA342EDCF80A00549580 /* opencv2.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = opencv2.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -129,7 +120,6 @@
 				C14DAF532B7C375D00A7333E /* GRPCCore in Frameworks */,
 				C14DAF632B7C375D00A7333E /* GRPCNIOTransportHTTP2 in Frameworks */,
 				C14DAF732B7C375D00A7333E /* GRPCProtobuf in Frameworks */,
-				C1EAFA352EDCF80A00549580 /* opencv2.xcframework in Frameworks */,
 				C1DA80DC2ED0F61D00B55CC2 /* RealityKitContent in Frameworks */,
 				C1E05F782ECD84DF0018C506 /* LiveKitWebRTC in Frameworks */,
 			);
@@ -200,7 +190,6 @@
 				C1GRPC032B93C1AC00F2269D /* Proto */,
 				165ADB4E2B4B71B0008A756F /* App.swift */,
 				165ADB502B4B71B0008A756F /* ContentView.swift */,
-				C1EAFA212EDCF22A00549580 /* OpenCV */,
 				C1EAF9712ED7E66600549580 /* MuJoCo */,
 				C1E05F792ECD850B0018C506 /* ImageData.swift */,
 				C1EAF9762ED7EC9000549580 /* CombinedStreamingView.swift */,
@@ -210,8 +199,6 @@
 				C1E05F7B2ECD850B0018C506 /* WebRTCClient.swift */,
 				C1EAF97E2EDBB9C700549580 /* RecordingManager.swift */,
 				C1EAF96B2ED7E13400549580 /* GRPCServer.swift */,
-				C1C7672C2EF1CBB90020844F /* CustomImageStorage.swift */,
-				C14B98612EEB86D2000B78D8 /* MarkerDetectionManager.swift */,
 				16688DE52B59F35F004CE12B /* 🥽AppModel.swift */,
 				C1B6715E2EE68D4000574B6F /* PersonaCaptureController.swift */,
 				1642FAB82B4D6CAA0084F9ED /* 🌐RealityView.swift */,
@@ -247,16 +234,6 @@
 				C1EAF9702ED7E66600549580 /* MuJoCoStreamingView.swift */,
 			);
 			path = MuJoCo;
-			sourceTree = "<group>";
-		};
-		C1EAFA212EDCF22A00549580 /* OpenCV */ = {
-			isa = PBXGroup;
-			children = (
-				C1EAFA342EDCF80A00549580 /* opencv2.xcframework */,
-				C1EAFA1F2EDCF22A00549580 /* OpenCVWrapper.h */,
-				C1EAFA202EDCF22A00549580 /* OpenCVWrapper.mm */,
-			);
-			path = OpenCV;
 			sourceTree = "<group>";
 		};
 		C1EAFA2B2EDCF63F00549580 /* Frameworks */ = {
@@ -368,7 +345,6 @@
 			files = (
 				16EE5E992B576DA800D354ED /* 🧩Name.swift in Sources */,
 				160ED7982B4B74C5002AD987 /* 🧑HeadTrackingComponent&System.swift in Sources */,
-				C1EAFA222EDCF22A00549580 /* OpenCVWrapper.mm in Sources */,
 				1642FAB92B4D6CAA0084F9ED /* 🌐RealityView.swift in Sources */,
 				C1DA80C72ECE8C6F00B55CC2 /* ViewControlSettings.swift in Sources */,
 				1642FAB52B4D54A60084F9ED /* 🛠️SettingPanel.swift in Sources */,
@@ -379,7 +355,6 @@
 				16EE5E9B2B576DB000D354ED /* 🧩Model.swift in Sources */,
 				16688DE62B59F35F004CE12B /* 🥽AppModel.swift in Sources */,
 				165ADB4F2B4B71B0008A756F /* App.swift in Sources */,
-				C14B98622EEB86D2000B78D8 /* MarkerDetectionManager.swift in Sources */,
 				C1EAF96C2ED7E13400549580 /* GRPCServer.swift in Sources */,
 				16C95AE52B5E762400CF0FED /* 🛠️MenuTop.swift in Sources */,
 				C1EAF9772ED7EC9000549580 /* CombinedStreamingView.swift in Sources */,
@@ -396,7 +371,6 @@
 				C1893C762B93C1AC00F2269D /* handtracking.grpc.swift in Sources */,
 				C1893C772B93C1AC00F2269D /* handtracking.pb.swift in Sources */,
 				16C95AE32B5E75D800CF0FED /* 🛠️Panel.swift in Sources */,
-				C1C7672D2EF1CBB90020844F /* CustomImageStorage.swift in Sources */,
 				C1EAF9792EDBA73600549580 /* UVCCameraManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -422,7 +396,7 @@
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
 				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-					CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
@@ -431,7 +405,7 @@
 				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-					CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
 				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
@@ -464,7 +438,7 @@
 				SDKROOT = xros;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-					XROS_DEPLOYMENT_TARGET = 2.2;
+				XROS_DEPLOYMENT_TARGET = 2.2;
 			};
 			name = Debug;
 		};
@@ -486,7 +460,7 @@
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
 				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-					CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
@@ -495,7 +469,7 @@
 				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-					CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
 				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
@@ -521,7 +495,7 @@
 				SDKROOT = xros;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
-					XROS_DEPLOYMENT_TARGET = 2.2;
+				XROS_DEPLOYMENT_TARGET = 2.2;
 			};
 			name = Release;
 		};
@@ -560,10 +534,9 @@
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "Go2 Teleop/Go2 Teleop-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
-					XROS_DEPLOYMENT_TARGET = 2.2;
+				TARGETED_DEVICE_FAMILY = 7;
+				XROS_DEPLOYMENT_TARGET = 2.2;
 			};
 			name = Debug;
 		};
@@ -602,10 +575,9 @@
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "Go2 Teleop/Go2 Teleop-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
-					XROS_DEPLOYMENT_TARGET = 2.2;
+				TARGETED_DEVICE_FAMILY = 7;
+				XROS_DEPLOYMENT_TARGET = 2.2;
 			};
 			name = Release;
 		};

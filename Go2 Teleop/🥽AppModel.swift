@@ -765,17 +765,7 @@ func fill_handUpdate() -> Handtracking_HandUpdate {
         }
     }
     
-    // MARKER DETECTION: Append detected markers as additional matrices in right hand skeleton
-    // Format: After normal 27 joints, append:
-    //   - Header matrix: m00=666.0 (marker data signal), m01=marker_count
-    //   - For each marker: pose matrix with marker_id encoded in m33 (normally 1.0) as 1000+id+dict*100
-    if let markerData = getMarkerMatrices() {
-        for matrix in markerData {
-            handUpdate.rightHand.skeleton.jointMatrices.append(matrix)
-        }
-    }
-    
-    // STYLUS TRACKING: Append tracked stylus pose after marker data
+    // STYLUS TRACKING: Append tracked stylus pose after hand joint data
     // Format: Header matrix (m00=777.0, m01=stylus_count), then pose matrices
     if #available(visionOS 26.0, *) {
         if let stylusData = getStylusMatrices() {
@@ -841,71 +831,6 @@ func getStylusMatrices() -> [Handtracking_Matrix4x4]? {
     
     return matrices
 }
-
-/// Get marker detection matrices to append to the hand update
-/// Returns nil if marker detection is disabled or no images detected
-/// Includes both ArUco markers and custom user images
-@MainActor
-func getMarkerMatrices() -> [Handtracking_Matrix4x4]? {
-    let manager = MarkerDetectionManager.shared
-    // Use thread-safe snapshot properties for non-MainActor access
-    guard manager.snapshotEnabled else { return nil }
-    let markers = manager.snapshotMarkers
-    let fixedMarkerIds = manager.snapshotFixedMarkers
-    let customImages = manager.snapshotCustomImages
-    let fixedCustomIds = manager.snapshotFixedCustomImages
-    
-    let totalCount = markers.count + customImages.count
-    guard totalCount > 0 else { return nil }
-    
-    var matrices: [Handtracking_Matrix4x4] = []
-    
-    // Header matrix: signals marker data presence
-    var header = Handtracking_Matrix4x4()
-    header.m00 = 666.0  // Marker data signal
-    header.m01 = Float(totalCount)  // Number of images following
-    matrices.append(header)
-    
-    // Append each ArUco marker's pose matrix
-    for (_, marker) in markers {
-        var matrix = createMatrix4x4(from: marker.poseInWorld)
-        // Encode marker info in m33 (normally 1.0 for homogeneous coordinates)
-        // Format: 1000 + marker_id + (dict_type * 100)
-        // This allows decoding: id = (value-1000) % 100, dict = (value-1000) / 100
-        matrix.m33 = 1000.0 + Float(marker.id) + Float(marker.dictionaryType) * 100.0
-        // Encode image type in m30: 0.0 = ArUco marker
-        matrix.m30 = 0.0
-        // Encode isFixed flag in m32 (normally 0.0 in a homogeneous matrix)
-        // 1.0 = fixed, 0.0 = not fixed
-        matrix.m32 = fixedMarkerIds.contains(marker.id) ? 1.0 : 0.0
-        // Encode isTracked flag in m31 (normally 0.0 in a homogeneous matrix)
-        // 1.0 = currently tracked by ARKit, 0.0 = tracking lost
-        matrix.m31 = marker.isTracked ? 1.0 : 0.0
-        matrices.append(matrix)
-    }
-    
-    // Append each custom image's pose matrix
-    // Custom images use a sequential index for encoding
-    var customIndex = 0
-    for (imageId, customImage) in customImages {
-        var matrix = createMatrix4x4(from: customImage.poseInWorld)
-        // Encode custom image info in m33: 2000 + sequential_index
-        // Python will decode via m30 to determine image type
-        matrix.m33 = 2000.0 + Float(customIndex)
-        // Encode image type in m30: 1.0 = custom image
-        matrix.m30 = 1.0
-        // Encode isFixed flag in m32
-        matrix.m32 = fixedCustomIds.contains(imageId) ? 1.0 : 0.0
-        // Encode isTracked flag in m31
-        matrix.m31 = customImage.isTracked ? 1.0 : 0.0
-        matrices.append(matrix)
-        customIndex += 1
-    }
-    
-    return matrices
-}
-
-
 
 func createMatrix4x4(from jointMatrix: simd_float4x4) -> Handtracking_Matrix4x4 {
     var matrix = Handtracking_Matrix4x4()

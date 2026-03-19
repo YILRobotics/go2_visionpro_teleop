@@ -22,7 +22,6 @@ struct PointCloudPayload {
 
 @MainActor
 final class CombinedStreamingUpdateCache: ObservableObject {
-    var fixedMarkerTransforms: [Int: Transform] = [:]
     var cachedLeftJointEntities: [ModelEntity] = []
     var cachedRightJointEntities: [ModelEntity] = []
     var cachedLeftBoneEntities: [ModelEntity] = []
@@ -35,101 +34,8 @@ final class CombinedStreamingUpdateCache: ObservableObject {
     var pointCloudUpdateInFlight: Bool = false
     var pendingPointCloudPayload: PointCloudPayload? = nil
     var lastPointCloudSignature: UInt64? = nil
-}
-
-// MARK: - Marker Label View (SwiftUI attachment for real-time text updates)
-
-struct MarkerLabelView: View {
-    @ObservedObject var markerManager: MarkerDetectionManager
-    let index: Int
-    
-    /// Convert dictionary raw value to human-readable name
-    private func dictionaryName(_ rawValue: Int) -> String {
-        switch rawValue {
-        case 0...3: return "4x4"
-        case 4...7: return "5x5"
-        case 8...11: return "6x6"
-        case 12...15: return "7x7"
-        default: return "?"
-        }
-    }
-    
-    /// Get all visible markers (detected + fixed, deduplicated)
-    private var allMarkerIds: [Int] {
-        let allIds = Set(markerManager.detectedMarkers.keys).union(markerManager.fixedMarkers.keys)
-        return allIds.sorted()
-    }
-    
-    /// Get marker data for display (prefer fixed if exists, otherwise detected)
-    private func getMarker(_ markerId: Int) -> DetectedMarker? {
-        return markerManager.fixedMarkers[markerId] ?? markerManager.detectedMarkers[markerId]
-    }
-    
-    var body: some View {
-        let sortedMarkers = allMarkerIds
-        
-        if index < sortedMarkers.count {
-            let markerId = sortedMarkers[index]
-            if let marker = getMarker(markerId) {
-                let isFixed = markerManager.isMarkerFixed(markerId)
-                
-                VStack(spacing: 6) {
-                    // Per-marker controls: Fix toggle + Delete button (1.5x larger for easier interaction)
-                    HStack(spacing: 12) {
-                        // Fix toggle
-                        Button {
-                            markerManager.setMarkerFixed(markerId, fixed: !isFixed)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: isFixed ? "pin.fill" : "pin")
-                                    .font(.system(size: 15, weight: .bold))
-                                Text(isFixed ? "Fixed" : "Fix")
-                                    .font(.system(size: 15, weight: .medium))
-                            }
-                            .foregroundColor(isFixed ? .yellow : .white.opacity(0.8))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 9)
-                                    .fill(isFixed ? Color.yellow.opacity(0.3) : Color.black.opacity(0.5))
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        
-                        // Delete button
-                        Button {
-                            markerManager.deleteMarker(markerId)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 21))
-                                .foregroundColor(.red.opacity(0.8))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .transaction { $0.animation = nil }
-                    
-                    // Marker info
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(isFixed ? Color.yellow : (marker.isTracked ? Color.green : Color.red))
-                            .frame(width: 8, height: 8)
-                        
-                        Text("\(dictionaryName(marker.dictionaryType)) #\(markerId)")
-                            .font(.system(size: 14, weight: .bold))
-                        Text("~\(String(format: "%.0f", marker.estimatedSizeMeters * 100))cm")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.black.opacity(0.7))
-                    )
-                    .foregroundColor(isFixed ? .yellow : .orange)
-                }
-            }
-        }
-    }
+    var lastStatusFixedToWorld: Bool = false
+    var capturedStatusFixedWorldTransform: Transform? = nil
 }
 
 /// Combined Streaming View that supports:
@@ -145,7 +51,6 @@ struct CombinedStreamingView: View {
     @StateObject private var recordingManager = RecordingManager.shared
     @StateObject private var updateCache = CombinedStreamingUpdateCache()
     @ObservedObject private var dataManager = DataManager.shared
-    @ObservedObject private var markerDetectionManager = MarkerDetectionManager.shared
     
     // Video state
     @State private var updateTrigger = false
@@ -165,7 +70,6 @@ struct CombinedStreamingView: View {
     @State private var stereoMaterialEntity: Entity? = nil
     @State private var fixedWorldTransform: Transform? = nil
     @State private var statusFixedWorldTransform: Transform? = nil
-    @State private var lastStatusFixedToWorld: Bool = false
     @State private var uvcFrame: UIImage? = nil  // UVC camera frame
     
     // MuJoCo state
@@ -583,7 +487,7 @@ struct CombinedStreamingView: View {
             
             // === STATUS UPDATE ===
             let statusFixed = dataManager.statusFixedToWorld
-            let statusFixedChanged = statusFixed != lastStatusFixedToWorld
+            let statusFixedChanged = statusFixed != updateCache.lastStatusFixedToWorld
             let statusHeadAnchor = findEntity(named: "statusHeadAnchor", in: updateContent.entities) as? AnchorEntity
             
             if let statusContainer = findEntity(named: "statusContainer", in: updateContent.entities) {
@@ -592,16 +496,18 @@ struct CombinedStreamingView: View {
                         if statusFixedChanged {
                             // Capture the current world transform before switching anchors to prevent jumps
                             let worldMatrix = statusContainer.transformMatrix(relativeTo: nil)
-                            statusFixedWorldTransform = Transform(matrix: worldMatrix)
+                            updateCache.capturedStatusFixedWorldTransform = Transform(matrix: worldMatrix)
                         }
                         if statusContainer.parent !== worldAnchor {
                             statusContainer.setParent(worldAnchor, preservingWorldTransform: true)
                         }
-                        if let lockedTransform = statusFixedWorldTransform {
+                        let lockedTransform = statusFixedWorldTransform ?? updateCache.capturedStatusFixedWorldTransform
+                        if let lockedTransform {
                             statusContainer.move(to: lockedTransform, relativeTo: worldAnchor, duration: 0.1, timingFunction: .linear)
                         }
                     }
                 } else if let statusHeadAnchor {
+                    updateCache.capturedStatusFixedWorldTransform = nil
                     if statusContainer.parent !== statusHeadAnchor {
                         statusContainer.setParent(statusHeadAnchor, preservingWorldTransform: true)
                     }
@@ -620,7 +526,7 @@ struct CombinedStreamingView: View {
                     statusContainer.move(to: transform, relativeTo: statusContainer.parent, duration: 0.5, timingFunction: .easeInOut)
                 }
             }
-            lastStatusFixedToWorld = statusFixed
+            updateCache.lastStatusFixedToWorld = statusFixed
             
             if let statusPreviewContainer = findEntity(named: "statusPreviewContainer", in: updateContent.entities) {
                 if statusFixed {
@@ -876,110 +782,6 @@ struct CombinedStreamingView: View {
                 }
             }
             
-            // === MARKER DETECTION UPDATE ===
-            if let markerRoot = findEntity(named: "markerRoot", in: updateContent.entities),
-               let markerWorldAnchor = findEntity(named: "markerWorldAnchor", in: updateContent.entities) {
-                let markerManager = MarkerDetectionManager.shared
-                
-                // Merge detected and fixed markers - fixed markers override detected ones
-                var allMarkers: [Int: DetectedMarker] = markerManager.detectedMarkers
-                for (id, marker) in markerManager.fixedMarkers {
-                    allMarkers[id] = marker
-                }
-                
-                // Get sorted marker IDs for consistent entity assignment
-                let sortedMarkerIds = allMarkers.keys.sorted()
-                
-                // Track which entity indices are in use
-                var usedEntityIndices = Set<Int>()
-                
-                if markerManager.isEnabled && !allMarkers.isEmpty {
-                    var entityIndex = 0
-                    for markerId in sortedMarkerIds {
-                        guard entityIndex < 20 else { break }
-                        guard let marker = allMarkers[markerId] else { continue }
-                        
-                        let isFixed = markerManager.isMarkerFixed(markerId)
-                        
-                        if let markerEntity = markerRoot.findEntity(named: "marker_\(entityIndex)") ??
-                                              markerWorldAnchor.findEntity(named: "marker_\(entityIndex)") {
-                            
-                            // Apply full transform from ARKit anchor (or fixed pose)
-                            // Then rotate -90° around X and 180° around Z to align correctly
-                            var transform = Transform(matrix: marker.poseInWorld)
-                            let rotateX = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])  // -90° around X
-                            let rotateZ = simd_quatf(angle: .pi, axis: [0, 0, 1])  // 180° around Z
-                            transform.rotation = transform.rotation * rotateX * rotateZ
-                            
-                            if isFixed {
-                                // Fixed marker: parent to world anchor, maintain world position
-                                if markerEntity.parent !== markerWorldAnchor {
-                                    // Store the transform to apply after re-parenting
-                                    updateCache.fixedMarkerTransforms[markerId] = transform
-                                    markerEntity.setParent(markerWorldAnchor, preservingWorldTransform: false)
-                                }
-                                // Apply the fixed transform
-                                if let lockedTransform = updateCache.fixedMarkerTransforms[markerId] {
-                                    markerEntity.move(to: lockedTransform, relativeTo: markerWorldAnchor, duration: 0.1, timingFunction: .linear)
-                                }
-                            } else {
-                                // Live marker: parent to markerRoot, update from tracking
-                                if markerEntity.parent !== markerRoot {
-                                    markerEntity.setParent(markerRoot, preservingWorldTransform: true)
-                                    updateCache.fixedMarkerTransforms.removeValue(forKey: markerId)
-                                }
-                                // Use move for smoother transitions (no flashing)
-                                markerEntity.move(to: transform, relativeTo: markerRoot, duration: 0.05, timingFunction: .linear)
-                            }
-                            markerEntity.isEnabled = true
-                            usedEntityIndices.insert(entityIndex)
-                            
-                            // Use estimated size from this specific marker
-                            let markerSize = marker.estimatedSizeMeters
-                            let halfSize = markerSize / 2
-                            
-                            // Update boundary edges - in the XY plane (marker surface)
-                            // After flip: X=right, Y=down in image, Z=out toward viewer
-                            if let boundary0 = markerEntity.findEntity(named: "boundary_0") as? ModelEntity {
-                                boundary0.position = [0, halfSize, 0]  // Top edge
-                                boundary0.scale = [markerSize / 0.1, 1, 1]
-                                boundary0.transform.rotation = .init(angle: 0, axis: [0, 0, 1])
-                            }
-                            if let boundary1 = markerEntity.findEntity(named: "boundary_1") as? ModelEntity {
-                                boundary1.position = [0, -halfSize, 0]  // Bottom edge
-                                boundary1.scale = [markerSize / 0.1, 1, 1]
-                            }
-                            if let boundary2 = markerEntity.findEntity(named: "boundary_2") as? ModelEntity {
-                                boundary2.position = [halfSize, 0, 0]  // Right edge
-                                boundary2.scale = [markerSize / 0.1, 1, 1]
-                                boundary2.transform.rotation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-                            }
-                            if let boundary3 = markerEntity.findEntity(named: "boundary_3") as? ModelEntity {
-                                boundary3.position = [-halfSize, 0, 0]  // Left edge
-                                boundary3.scale = [markerSize / 0.1, 1, 1]
-                                boundary3.transform.rotation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-                            }
-                            
-                            // Update label position (attachment is already parented from setup)
-                            if let labelEntity = markerEntity.findEntity(named: "label") {
-                                labelEntity.position = [0, 0, 0.05]  // 5cm out from marker surface along Z
-                            }
-                        }
-                        entityIndex += 1
-                    }
-                }
-                
-                // Hide only unused entity slots (instead of all markers)
-                for i in 0..<20 where !usedEntityIndices.contains(i) {
-                    if let markerEntity = markerRoot.findEntity(named: "marker_\(i)") {
-                        markerEntity.isEnabled = false
-                    }
-                    if let markerEntity = markerWorldAnchor.findEntity(named: "marker_\(i)") {
-                        markerEntity.isEnabled = false
-                    }
-                }
-            }
-
             // === ACCESSORY TRACKING ===
             // Update snapshots for streaming (captures current stylus transform)
             if #available(visionOS 26.0, *) {
@@ -1031,18 +833,6 @@ struct CombinedStreamingView: View {
                 showVideoStatus: true,
                 videoFixed: dataManager.videoPlaneFixedToWorld
             )
-        }
-        
-        // Marker label attachments (20 labels for up to 20 markers)
-        markerLabelAttachments
-    }
-    
-    @AttachmentContentBuilder
-    private var markerLabelAttachments: some AttachmentContent {
-        ForEach(0..<20, id: \.self) { index in
-            Attachment(id: "markerLabel_\(index)") {
-                MarkerLabelView(markerManager: markerDetectionManager, index: index)
-            }
         }
     }
     
@@ -1156,96 +946,6 @@ struct CombinedStreamingView: View {
             boneEntity.name = "rightBone_\(idx)_\(connection.0)_\(connection.1)"
             boneEntity.isEnabled = false
             handJointsRoot.addChild(boneEntity)
-        }
-        
-        // === MARKER DETECTION VISUALIZATION ===
-        // World anchor for fixed markers (same pattern as video plane)
-        let markerWorldAnchor = AnchorEntity(world: .zero)
-        markerWorldAnchor.name = "markerWorldAnchor"
-        content.add(markerWorldAnchor)
-        
-        let markerRoot = Entity()
-        markerRoot.name = "markerRoot"
-        content.add(markerRoot)
-        
-        // Create coordinate frame + boundary for each potential marker (up to 20)
-        let axisLength: Float = 0.05  // 5cm axis length
-        let axisRadius: Float = 0.003  // 3mm radius
-        let boundaryWidth: Float = 0.003  // 3mm line width
-        
-        // Axis meshes
-        let axisMesh = MeshResource.generateCylinder(height: axisLength, radius: axisRadius)
-        let originMesh = MeshResource.generateSphere(radius: axisRadius * 2)
-        
-        // Axis materials (RGB = XYZ)
-        var xMaterial = UnlitMaterial()
-        xMaterial.color = .init(tint: .red)
-        var yMaterial = UnlitMaterial()
-        yMaterial.color = .init(tint: .green)
-        var zMaterial = UnlitMaterial()
-        zMaterial.color = .init(tint: .blue)
-        var originMaterial = UnlitMaterial()
-        originMaterial.color = .init(tint: .white)
-        var boundaryMaterial = UnlitMaterial()
-        boundaryMaterial.color = .init(tint: UIColor(red: 1.0, green: 0.6, blue: 0.1, alpha: 0.9))
-        
-        for i in 0..<20 {
-            // Container for the entire marker visualization
-            let markerContainer = Entity()
-            markerContainer.name = "marker_\(i)"
-            markerContainer.isEnabled = false
-            markerRoot.addChild(markerContainer)
-            
-            // Origin sphere (white)
-            let origin = ModelEntity(mesh: originMesh, materials: [originMaterial])
-            origin.name = "origin"
-            markerContainer.addChild(origin)
-            
-            // ARKit ImageAnchor coordinate system:
-            // X = right (red), Y = up in image plane (green), Z = out of image (blue, normal)
-            
-            // X axis (red) - cylinder along X
-            let xAxis = ModelEntity(mesh: axisMesh, materials: [xMaterial])
-            xAxis.name = "xAxis"
-            xAxis.transform.rotation = simd_quatf(angle: -.pi / 2, axis: [0, 0, 1])  // Rotate to point along +X
-            xAxis.position = [axisLength / 2, 0, 0]
-            markerContainer.addChild(xAxis)
-            
-            // Y axis (green) - cylinder along Y (in the marker plane)
-            let yAxis = ModelEntity(mesh: axisMesh, materials: [yMaterial])
-            yAxis.name = "yAxis"
-            // Default cylinder is along Y, no rotation needed
-            yAxis.position = [0, axisLength / 2, 0]
-            markerContainer.addChild(yAxis)
-            
-            // Z axis (blue) - cylinder along Z (pointing out of marker, the normal)
-            let zAxis = ModelEntity(mesh: axisMesh, materials: [zMaterial])
-            zAxis.name = "zAxis"
-            zAxis.transform.rotation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])  // Rotate to point along +Z
-            zAxis.position = [0, 0, axisLength / 2]
-            markerContainer.addChild(zAxis)
-            
-            // Boundary edges (in the XY plane at Z=0)
-            let boundaryMesh = MeshResource.generateBox(width: 0.1, height: boundaryWidth, depth: boundaryWidth)
-            
-            for j in 0..<4 {
-                let edge = ModelEntity(mesh: boundaryMesh, materials: [boundaryMaterial])
-                edge.name = "boundary_\(j)"
-                markerContainer.addChild(edge)
-            }
-            
-            // Text label entity - positioned along Z axis (pointing out of marker)
-            let labelEntity = Entity()
-            labelEntity.name = "label"
-            labelEntity.position = [0, 0, 0.05]  // 5cm out from marker surface (along Z)
-            markerContainer.addChild(labelEntity)
-            
-            // Attach the SwiftUI label to the label entity
-            if let labelAttachment = attachments.entity(for: "markerLabel_\(i)") {
-                labelAttachment.setParent(labelEntity)
-                // Add billboard component so label always faces the user
-                labelAttachment.components.set(BillboardComponent())
-            }
         }
         
         // === STATUS DISPLAY ===
@@ -3052,6 +2752,8 @@ private struct StateChangeModifiers: ViewModifier {
         updateCache.pointCloudUpdateInFlight = false
         updateCache.pendingPointCloudPayload = nil
         updateCache.lastPointCloudSignature = nil
+        updateCache.lastStatusFixedToWorld = false
+        updateCache.capturedStatusFixedWorldTransform = nil
     }
     
     private func handleVideoPlaneFixedChange(isFixed: Bool) {
@@ -3102,6 +2804,8 @@ private struct StateChangeModifiers: ViewModifier {
         uvcCameraManager.stopCapture()
         fixedWorldTransform = nil
         statusFixedWorldTransform = nil
+        updateCache.lastStatusFixedToWorld = false
+        updateCache.capturedStatusFixedWorldTransform = nil
         Task { await mujocoManager.stopServer() }
     }
 }
