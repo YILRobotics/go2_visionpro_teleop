@@ -1019,6 +1019,9 @@ struct CombinedStreamingView: View {
                 onReset: {
                     mujocoManager.resetSimulation()
                 },
+                onControllerModeChanged: { enabled in
+                    videoStreamManager.sendControllerMode(enabled: enabled)
+                },
                 mujocoManager: mujocoManager
             )
         }

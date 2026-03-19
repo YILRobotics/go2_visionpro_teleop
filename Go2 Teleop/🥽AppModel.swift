@@ -319,6 +319,16 @@ class DataManager: ObservableObject {
     @Published var videoEnabled: Bool = false  // Whether video track is present at all
     @Published var simEnabled: Bool = false    // Whether simulation is enabled
     @Published var controlChannelReady: Bool = false  // Whether control data channel is open
+    @Published var controllerModeEnabled: Bool = false
+    @Published var controllerHudVisible: Bool = false
+    @Published var controllerTrackingActive: Bool = false
+    @Published var controllerDotX: Float = 0.0
+    @Published var controllerDotY: Float = 0.0
+    @Published var controllerCmdVelLinearX: Float = 0.0
+    @Published var controllerCmdVelAngularZ: Float = 0.0
+    @Published var controllerHeadDeltaRoll: Float = 0.0
+    @Published var controllerHeadDeltaPitch: Float = 0.0
+    @Published var controllerHeadDeltaYaw: Float = 0.0
     @Published var crossNetworkRoomCode: String? = nil  // Room code for cross-network mode (nil = local mode)
     @Published var pointCloudSpriteSize: Float = 0.0043  // Size of rendered point sprites (meters)
     

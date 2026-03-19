@@ -588,14 +588,19 @@ class WebRTCClient: NSObject, LKRTCPeerConnectionDelegate, @unchecked Sendable {
 
     @discardableResult
     func sendControlCommand(_ command: ControlCommand) -> Bool {
-        let payload: [String: Any] = ["type": command.rawValue]
-        guard let data = try? JSONSerialization.data(withJSONObject: payload) else {
-            dlog("❌ [WebRTC] Failed to encode control command: \(command.rawValue)")
+        sendControlPayload(["type": command.rawValue])
+    }
+    
+    @discardableResult
+    func sendControlPayload(_ payload: [String: Any]) -> Bool {
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload) else {
+            dlog("❌ [WebRTC] Failed to encode control payload")
             return false
         }
 
         guard let channel = controlDataChannel, channel.readyState == .open else {
-            dlog("⚠️ [WebRTC] Control channel not open; cannot send \(command.rawValue)")
+            dlog("⚠️ [WebRTC] Control channel not open; cannot send payload")
             Task { @MainActor in
                 DataManager.shared.controlChannelReady = false
             }
@@ -605,7 +610,7 @@ class WebRTCClient: NSObject, LKRTCPeerConnectionDelegate, @unchecked Sendable {
         let buffer = LKRTCDataBuffer(data: data, isBinary: false)
         let sent = channel.sendData(buffer)
         if !sent {
-            dlog("⚠️ [WebRTC] Failed to send control command over data channel")
+            dlog("⚠️ [WebRTC] Failed to send control payload over data channel")
         } else {
             Task { @MainActor in
                 DataManager.shared.controlChannelReady = true
@@ -625,6 +630,16 @@ class WebRTCClient: NSObject, LKRTCPeerConnectionDelegate, @unchecked Sendable {
         controlDataChannel = nil
         Task { @MainActor in
             DataManager.shared.controlChannelReady = false
+            DataManager.shared.controllerModeEnabled = false
+            DataManager.shared.controllerHudVisible = false
+            DataManager.shared.controllerTrackingActive = false
+            DataManager.shared.controllerDotX = 0.0
+            DataManager.shared.controllerDotY = 0.0
+            DataManager.shared.controllerCmdVelLinearX = 0.0
+            DataManager.shared.controllerCmdVelAngularZ = 0.0
+            DataManager.shared.controllerHeadDeltaRoll = 0.0
+            DataManager.shared.controllerHeadDeltaPitch = 0.0
+            DataManager.shared.controllerHeadDeltaYaw = 0.0
         }
     }
     
@@ -966,6 +981,16 @@ extension WebRTCClient: LKRTCDataChannelDelegate {
                 controlDataChannel = nil
                 Task { @MainActor in
                     DataManager.shared.controlChannelReady = false
+                    DataManager.shared.controllerModeEnabled = false
+                    DataManager.shared.controllerHudVisible = false
+                    DataManager.shared.controllerTrackingActive = false
+                    DataManager.shared.controllerDotX = 0.0
+                    DataManager.shared.controllerDotY = 0.0
+                    DataManager.shared.controllerCmdVelLinearX = 0.0
+                    DataManager.shared.controllerCmdVelAngularZ = 0.0
+                    DataManager.shared.controllerHeadDeltaRoll = 0.0
+                    DataManager.shared.controllerHeadDeltaPitch = 0.0
+                    DataManager.shared.controllerHeadDeltaYaw = 0.0
                 }
             } else if dataChannel == pointCloudDataChannel {
                 dlog("⚠️ [WebRTC] Point-cloud channel is closing/closed")
@@ -1177,11 +1202,105 @@ extension WebRTCClient: LKRTCDataChannelDelegate {
             return
         }
 
-        if let message = String(data: buffer.data, encoding: .utf8) {
-            dlog("📨 [WebRTC] Control message: \(message)")
-        } else {
+        guard let message = String(data: buffer.data, encoding: .utf8) else {
             dlog("⚠️ [WebRTC] Control message received but failed to decode text")
+            return
         }
+        
+        dlog("📨 [WebRTC] Control message: \(message)")
+        
+        guard let jsonData = message.data(using: .utf8),
+              let payload = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let type = payload["type"] as? String else {
+            return
+        }
+        
+        switch type {
+        case "controller_mode_ack":
+            guard let enabled = parseBool(payload["enabled"]) else { return }
+            Task { @MainActor in
+                DataManager.shared.controllerModeEnabled = enabled
+                DataManager.shared.controllerHudVisible = enabled
+                if !enabled {
+                    DataManager.shared.controllerTrackingActive = false
+                    DataManager.shared.controllerDotX = 0.0
+                    DataManager.shared.controllerDotY = 0.0
+                    DataManager.shared.controllerCmdVelLinearX = 0.0
+                    DataManager.shared.controllerCmdVelAngularZ = 0.0
+                    DataManager.shared.controllerHeadDeltaRoll = 0.0
+                    DataManager.shared.controllerHeadDeltaPitch = 0.0
+                    DataManager.shared.controllerHeadDeltaYaw = 0.0
+                }
+            }
+        case "controller_state":
+            Task { @MainActor in
+                if let enabled = self.parseBool(payload["enabled"]) {
+                    DataManager.shared.controllerModeEnabled = enabled
+                    DataManager.shared.controllerHudVisible = enabled
+                }
+                if let tracking = self.parseBool(payload["tracking_active"]) {
+                    DataManager.shared.controllerTrackingActive = tracking
+                }
+                if let dotX = self.parseFloat(payload["dot_x"]) {
+                    DataManager.shared.controllerDotX = dotX
+                }
+                if let dotY = self.parseFloat(payload["dot_y"]) {
+                    DataManager.shared.controllerDotY = dotY
+                }
+                if let linearX = self.parseFloat(payload["cmd_linear_x"]) {
+                    DataManager.shared.controllerCmdVelLinearX = linearX
+                }
+                if let angularZ = self.parseFloat(payload["cmd_angular_z"]) {
+                    DataManager.shared.controllerCmdVelAngularZ = angularZ
+                }
+                if let roll = self.parseFloat(payload["head_delta_roll"]) {
+                    DataManager.shared.controllerHeadDeltaRoll = roll
+                }
+                if let pitch = self.parseFloat(payload["head_delta_pitch"]) {
+                    DataManager.shared.controllerHeadDeltaPitch = pitch
+                }
+                if let yaw = self.parseFloat(payload["head_delta_yaw"]) {
+                    DataManager.shared.controllerHeadDeltaYaw = yaw
+                }
+            }
+        default:
+            break
+        }
+    }
+    
+    private func parseBool(_ value: Any?) -> Bool? {
+        if let boolValue = value as? Bool {
+            return boolValue
+        }
+        if let number = value as? NSNumber {
+            return number.boolValue
+        }
+        if let stringValue = value as? String {
+            let normalized = stringValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if ["true", "1", "yes", "on"].contains(normalized) {
+                return true
+            }
+            if ["false", "0", "no", "off"].contains(normalized) {
+                return false
+            }
+        }
+        return nil
+    }
+    
+    private func parseFloat(_ value: Any?) -> Float? {
+        if let floatValue = value as? Float {
+            return floatValue
+        }
+        if let doubleValue = value as? Double {
+            return Float(doubleValue)
+        }
+        if let number = value as? NSNumber {
+            return number.floatValue
+        }
+        if let stringValue = value as? String, let parsed = Float(stringValue) {
+            return parsed
+        }
+        return nil
     }
     
     /// Handle incoming USDZ transfer messages

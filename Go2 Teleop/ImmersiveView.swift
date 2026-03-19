@@ -402,6 +402,9 @@ struct ImmersiveView: View {
                     ),
                     previewStatusPosition: $previewStatusPosition,
                     previewStatusActive: $previewStatusActive,
+                    onControllerModeChanged: { enabled in
+                        videoStreamManager.sendControllerMode(enabled: enabled)
+                    },
 //                    onReset: {
 //                        sendResetToSimulator()
 //                    }
@@ -855,6 +858,43 @@ class VideoStreamManager: ObservableObject {
             dlog("✅ [DEBUG] Sent control command: \(command.rawValue)")
         } else {
             dlog("⚠️ [DEBUG] Failed to send control command: \(command.rawValue)")
+        }
+        return sent
+    }
+    
+    @discardableResult
+    func sendControlPayload(_ payload: [String: Any]) -> Bool {
+        guard let client = webrtcClient else {
+            dlog("⚠️ [DEBUG] Cannot send control payload; WebRTC client is nil")
+            return false
+        }
+        let sent = client.sendControlPayload(payload)
+        if !sent {
+            dlog("⚠️ [DEBUG] Failed to send control payload")
+        }
+        return sent
+    }
+    
+    @discardableResult
+    func sendControllerMode(enabled: Bool) -> Bool {
+        let payload: [String: Any] = [
+            "type": "controller_mode",
+            "enabled": enabled,
+        ]
+        let sent = sendControlPayload(payload)
+        if sent {
+            DataManager.shared.controllerModeEnabled = enabled
+            DataManager.shared.controllerHudVisible = enabled
+            if !enabled {
+                DataManager.shared.controllerTrackingActive = false
+                DataManager.shared.controllerDotX = 0.0
+                DataManager.shared.controllerDotY = 0.0
+                DataManager.shared.controllerCmdVelLinearX = 0.0
+                DataManager.shared.controllerCmdVelAngularZ = 0.0
+                DataManager.shared.controllerHeadDeltaRoll = 0.0
+                DataManager.shared.controllerHeadDeltaPitch = 0.0
+                DataManager.shared.controllerHeadDeltaYaw = 0.0
+            }
         }
         return sent
     }

@@ -159,6 +159,7 @@ struct StatusOverlay: View {
     @Binding var previewStatusPosition: (x: Float, y: Float)?
     @Binding var previewStatusActive: Bool
     var onReset: (() -> Void)? = nil
+    var onControllerModeChanged: ((Bool) -> Bool)? = nil
     var mujocoManager: (any MuJoCoManager)?  // Optional MuJoCo manager for combined streaming
     @ObservedObject var dataManager = DataManager.shared
     @ObservedObject private var uvcCameraManager = UVCCameraManager.shared
@@ -183,7 +184,7 @@ struct StatusOverlay: View {
     // Flashing animation for warnings
     @State private var flashingOpacity: Double = 1.0
     
-    init(hasFrames: Binding<Bool> = .constant(false), showVideoStatus: Bool = true, isMinimized: Binding<Bool> = .constant(false), showViewControls: Binding<Bool> = .constant(false), previewZDistance: Binding<Float?> = .constant(nil), previewActive: Binding<Bool> = .constant(false), userInteracted: Binding<Bool> = .constant(false), videoMinimized: Binding<Bool> = .constant(false), videoFixed: Binding<Bool> = .constant(false), previewStatusPosition: Binding<(x: Float, y: Float)?> = .constant(nil), previewStatusActive: Binding<Bool> = .constant(false), onReset: (() -> Void)? = nil, mujocoManager: (any MuJoCoManager)? = nil) {
+    init(hasFrames: Binding<Bool> = .constant(false), showVideoStatus: Bool = true, isMinimized: Binding<Bool> = .constant(false), showViewControls: Binding<Bool> = .constant(false), previewZDistance: Binding<Float?> = .constant(nil), previewActive: Binding<Bool> = .constant(false), userInteracted: Binding<Bool> = .constant(false), videoMinimized: Binding<Bool> = .constant(false), videoFixed: Binding<Bool> = .constant(false), previewStatusPosition: Binding<(x: Float, y: Float)?> = .constant(nil), previewStatusActive: Binding<Bool> = .constant(false), onReset: (() -> Void)? = nil, onControllerModeChanged: ((Bool) -> Bool)? = nil, mujocoManager: (any MuJoCoManager)? = nil) {
         self._hasFrames = hasFrames
         self.showVideoStatus = showVideoStatus
         self._isMinimized = isMinimized
@@ -196,12 +197,13 @@ struct StatusOverlay: View {
         self._previewStatusPosition = previewStatusPosition
         self._previewStatusActive = previewStatusActive
         self.onReset = onReset
+        self.onControllerModeChanged = onControllerModeChanged
         self.mujocoManager = mujocoManager
 //        dlog("🟢 [StatusView] StatusOverlay init called, hasFrames: \(hasFrames.wrappedValue), showVideoStatus: \(showVideoStatus), mujocoEnabled: \(mujocoManager != nil)")
     }
     
     var body: some View {
-        return ZStack {
+        return ZStack(alignment: .bottomTrailing) {
             Group {
                 if isMinimized {
                     minimizedView
@@ -210,6 +212,48 @@ struct StatusOverlay: View {
                 }
             }
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: isMinimized)
+            
+            if dataManager.controllerHudVisible {
+                VStack(spacing: 8) {
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.35), lineWidth: 2)
+                            .frame(width: 120, height: 120)
+                        Circle()
+                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                            .frame(width: 80, height: 80)
+                        
+                        Rectangle()
+                            .fill(Color.white.opacity(0.35))
+                            .frame(width: 74, height: 2)
+                        Rectangle()
+                            .fill(Color.white.opacity(0.35))
+                            .frame(width: 2, height: 74)
+                        
+                        Circle()
+                            .fill(dataManager.controllerTrackingActive ? Color.green : Color.gray.opacity(0.7))
+                            .frame(width: 16, height: 16)
+                            .offset(
+                                x: CGFloat(max(-1.0, min(1.0, dataManager.controllerDotX))) * 34.0,
+                                y: CGFloat(max(-1.0, min(1.0, -dataManager.controllerDotY))) * 34.0
+                            )
+                            .shadow(color: dataManager.controllerTrackingActive ? Color.green.opacity(0.6) : Color.clear, radius: 4)
+                    }
+                    
+                    Text(dataManager.controllerTrackingActive ? "Tracking" : "Pinch To Track")
+                        .font(.caption2)
+                        .foregroundColor(dataManager.controllerTrackingActive ? .green : .white.opacity(0.65))
+                        .monospacedDigit()
+                }
+                .padding(12)
+                .background(Color.black.opacity(0.7))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+                .cornerRadius(14)
+                .padding(10)
+            }
         }
         .onAppear {
             dlog("🔴 [StatusView] StatusOverlay onAppear called")
@@ -276,6 +320,36 @@ struct StatusOverlay: View {
                 
             }
         }
+    }
+    
+    private var controllerModeBinding: Binding<Bool> {
+        Binding(
+            get: { dataManager.controllerModeEnabled },
+            set: { newValue in
+                let previous = dataManager.controllerModeEnabled
+                let previousTracking = dataManager.controllerTrackingActive
+                let previousDotX = dataManager.controllerDotX
+                let previousDotY = dataManager.controllerDotY
+                dataManager.controllerModeEnabled = newValue
+                dataManager.controllerHudVisible = newValue
+                if !newValue {
+                    dataManager.controllerTrackingActive = false
+                    dataManager.controllerDotX = 0.0
+                    dataManager.controllerDotY = 0.0
+                }
+                
+                if let sender = onControllerModeChanged {
+                    let sent = sender(newValue)
+                    if !sent {
+                        dataManager.controllerModeEnabled = previous
+                        dataManager.controllerHudVisible = previous
+                        dataManager.controllerTrackingActive = previousTracking
+                        dataManager.controllerDotX = previousDotX
+                        dataManager.controllerDotY = previousDotY
+                    }
+                }
+            }
+        )
     }
     
     private var minimizedView: some View {
@@ -1320,6 +1394,34 @@ struct StatusOverlay: View {
                     .background(Color.white.opacity(0.2))
                 
                 networkInfoSection
+                if onControllerModeChanged != nil {
+                    Divider()
+                        .background(Color.white.opacity(0.2))
+                    
+                    HStack(spacing: 10) {
+                        Image(systemName: "gamecontroller.fill")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(dataManager.controllerModeEnabled ? .green : .white.opacity(0.5))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Controller Mode")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.white)
+                            Text(dataManager.controlChannelReady ? "Enable right-hand pinch drive" : "Waiting for control channel")
+                                .font(.caption2)
+                                .foregroundColor(.white.opacity(0.55))
+                        }
+                        Spacer()
+                        Toggle("", isOn: controllerModeBinding)
+                            .labelsHidden()
+                            .tint(.green)
+                            .disabled(!dataManager.controlChannelReady)
+                    }
+                    .padding(10)
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(10)
+                    .opacity(dataManager.controlChannelReady ? 1.0 : 0.7)
+                }
                 
                 // Show detailed track information when connected (either WebRTC or UVC camera)
                 let showStreamDetails = showVideoStatus && (webrtcConnected || (dataManager.videoSource == .uvcCamera && uvcCameraManager.isCapturing))

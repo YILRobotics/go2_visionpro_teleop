@@ -24,6 +24,18 @@ vp_streamer:
     camera_mode: "both" # robot, realsense, both
     realsense_image_topic: "/camera/camera/color/image_raw"
     pointcloud_topic: "/points_downsampled"
+    controller_mode_enabled_on_startup: false
+    controller_cmd_vel_topic: "/cmd_vel"
+    controller_head_delta_topic: "/teleop/head_delta_rpy"
+    controller_publish_hz: 30.0
+    controller_pinch_start_threshold: 0.025
+    controller_pinch_release_threshold: 0.035
+    controller_max_delta_m: 0.20
+    controller_deadzone: 0.05
+    controller_linear_scale: 0.8
+    controller_angular_scale: 1.8
+    controller_max_linear_x: 0.8
+    controller_max_angular_z: 1.8
     # Teleop target to publish when MuJoCo stream is reset. Values are in
     # the `mycobot_base` frame by default and will be published as
     # `teleoperation/TeleopTarget` on `/teleop/ee_target`.

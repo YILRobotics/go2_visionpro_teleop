@@ -8,6 +8,7 @@ from pathlib import Path
 import queue
 from typing import Dict, List, Optional
 import struct
+import math
 
 from ament_index_python.packages import get_package_share_directory
 import rclpy
@@ -32,7 +33,7 @@ from avp_stream import VisionProStreamer
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
 from teleoperation.msg import TeleopTarget
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import TransformStamped, Twist, Vector3Stamped
 from tf2_ros import TransformBroadcaster
 from tf2_sensor_msgs.tf2_sensor_msgs import do_transform_cloud
 from sensor_msgs_py import point_cloud2
@@ -75,6 +76,18 @@ class VPStreamer(Node):
         self.declare_parameter("enable_pointcloud", True)
         self.declare_parameter("pointcloud_topic", "/points_downsampled")
         self.declare_parameter("realsense_image_topic", "/camera/camera/color/image_raw")
+        self.declare_parameter("controller_mode_enabled_on_startup", False)
+        self.declare_parameter("controller_cmd_vel_topic", "/cmd_vel")
+        self.declare_parameter("controller_head_delta_topic", "/teleop/head_delta_rpy")
+        self.declare_parameter("controller_publish_hz", 30.0)
+        self.declare_parameter("controller_pinch_start_threshold", 0.025)
+        self.declare_parameter("controller_pinch_release_threshold", 0.035)
+        self.declare_parameter("controller_max_delta_m", 0.20)
+        self.declare_parameter("controller_deadzone", 0.05)
+        self.declare_parameter("controller_linear_scale", 0.8)
+        self.declare_parameter("controller_angular_scale", 1.8)
+        self.declare_parameter("controller_max_linear_x", 0.8)
+        self.declare_parameter("controller_max_angular_z", 1.8)
         
         # Resolve the default MuJoCo scene from the robot_description package.
         robot_description_share = Path("/home/ferdinand/visionpro_teleop_project/visionProTeleop/ros2_ws/src/robot_description")
@@ -131,6 +144,32 @@ class VPStreamer(Node):
         self._pointcloud_rate_hz_internal = 30.0
         self._pointcloud_max_points = 200000
         self._tf_target_frame = "mycobot_base"
+        
+        self._controller_lock = threading.Lock()
+        self._controller_mode_enabled = bool(params["controller_mode_enabled_on_startup"])
+        self._controller_tracking_active = False
+        self._controller_anchor_wrist: Optional[np.ndarray] = None
+        self._controller_head_ref_rot: Optional[np.ndarray] = None
+        self._controller_dot_x = 0.0
+        self._controller_dot_y = 0.0
+        self._controller_last_publish_time = 0.0
+        self._controller_zero_pending = True
+        
+        self._controller_publish_hz = max(1.0, float(params["controller_publish_hz"]))
+        self._controller_publish_interval = 1.0 / self._controller_publish_hz
+        self._controller_pinch_start = float(params["controller_pinch_start_threshold"])
+        self._controller_pinch_release = float(params["controller_pinch_release_threshold"])
+        if self._controller_pinch_release <= self._controller_pinch_start:
+            self._controller_pinch_release = self._controller_pinch_start + 0.005
+        self._controller_max_delta_m = max(0.05, float(params["controller_max_delta_m"]))
+        self._controller_deadzone = float(np.clip(params["controller_deadzone"], 0.0, 0.5))
+        self._controller_linear_scale = float(params["controller_linear_scale"])
+        self._controller_angular_scale = float(params["controller_angular_scale"])
+        self._controller_max_linear_x = max(0.0, float(params["controller_max_linear_x"]))
+        self._controller_max_angular_z = max(0.0, float(params["controller_max_angular_z"]))
+
+        self._cmd_vel_pub = self.create_publisher(Twist, params["controller_cmd_vel_topic"], 10)
+        self._head_delta_pub = self.create_publisher(Vector3Stamped, params["controller_head_delta_topic"], 10)
 
         # TF listener must exist before any callbacks try to use it
         self.tf_buffer = Buffer()
@@ -177,6 +216,7 @@ class VPStreamer(Node):
         
 
         self.streamer = VisionProStreamer(ip=params["visionpro_ip"], record=False)
+        self.streamer.register_control_callback(self._on_control_message)
         self.viewer_handle = None
         
         if params["viewer"] == "ar":
@@ -283,6 +323,18 @@ class VPStreamer(Node):
         enable_pointcloud = self.get_parameter("enable_pointcloud").value
         pointcloud_topic = self.get_parameter("pointcloud_topic").value
         realsense_image_topic = self.get_parameter("realsense_image_topic").value
+        controller_mode_enabled_on_startup = self.get_parameter("controller_mode_enabled_on_startup").value
+        controller_cmd_vel_topic = self.get_parameter("controller_cmd_vel_topic").value
+        controller_head_delta_topic = self.get_parameter("controller_head_delta_topic").value
+        controller_publish_hz = self.get_parameter("controller_publish_hz").value
+        controller_pinch_start_threshold = self.get_parameter("controller_pinch_start_threshold").value
+        controller_pinch_release_threshold = self.get_parameter("controller_pinch_release_threshold").value
+        controller_max_delta_m = self.get_parameter("controller_max_delta_m").value
+        controller_deadzone = self.get_parameter("controller_deadzone").value
+        controller_linear_scale = self.get_parameter("controller_linear_scale").value
+        controller_angular_scale = self.get_parameter("controller_angular_scale").value
+        controller_max_linear_x = self.get_parameter("controller_max_linear_x").value
+        controller_max_angular_z = self.get_parameter("controller_max_angular_z").value
         ee_target_on_reset_position = list(self.get_parameter("ee_target_on_reset_position").get_parameter_value().double_array_value)
         ee_target_on_reset_orientation_xyzw = list(self.get_parameter("ee_target_on_reset_orientation_xyzw").get_parameter_value().double_array_value)
         ee_target_on_reset_gripper = int(self.get_parameter("ee_target_on_reset_gripper").get_parameter_value().integer_value)
@@ -305,6 +357,18 @@ class VPStreamer(Node):
             "enable_pointcloud": enable_pointcloud,
             "pointcloud_topic": pointcloud_topic,
             "realsense_image_topic": realsense_image_topic,
+            "controller_mode_enabled_on_startup": controller_mode_enabled_on_startup,
+            "controller_cmd_vel_topic": controller_cmd_vel_topic,
+            "controller_head_delta_topic": controller_head_delta_topic,
+            "controller_publish_hz": controller_publish_hz,
+            "controller_pinch_start_threshold": controller_pinch_start_threshold,
+            "controller_pinch_release_threshold": controller_pinch_release_threshold,
+            "controller_max_delta_m": controller_max_delta_m,
+            "controller_deadzone": controller_deadzone,
+            "controller_linear_scale": controller_linear_scale,
+            "controller_angular_scale": controller_angular_scale,
+            "controller_max_linear_x": controller_max_linear_x,
+            "controller_max_angular_z": controller_max_angular_z,
             "ee_target_on_reset_position": ee_target_on_reset_position,
             "ee_target_on_reset_orientation_xyzw": ee_target_on_reset_orientation_xyzw,
             "ee_target_on_reset_gripper": ee_target_on_reset_gripper,
@@ -434,8 +498,217 @@ class VPStreamer(Node):
 
         # Ensure derived values (sites, tendons) stay in sync
         mujoco.mj_forward(self.model, self.data)
+    
+    def _on_control_message(self, payload: Dict[str, object]) -> None:
+        if payload.get("type") != "controller_mode":
+            return
+        enabled = self._parse_bool(payload.get("enabled", False))
+        with self._controller_lock:
+            self._controller_mode_enabled = enabled
+            self._controller_tracking_active = False
+            self._controller_anchor_wrist = None
+            self._controller_head_ref_rot = None
+            self._controller_dot_x = 0.0
+            self._controller_dot_y = 0.0
+            self._controller_zero_pending = True
+        self.get_logger().info(f"Controller mode {'enabled' if enabled else 'disabled'} from VisionOS")
+    
+    @staticmethod
+    def _parse_bool(value) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        if isinstance(value, str):
+            return value.strip().lower() in ("1", "true", "yes", "on")
+        return False
+    
+    def _apply_deadzone(self, value: float) -> float:
+        deadzone = self._controller_deadzone
+        magnitude = abs(value)
+        if magnitude <= deadzone:
+            return 0.0
+        scaled = (magnitude - deadzone) / max(1e-6, (1.0 - deadzone))
+        return math.copysign(min(1.0, scaled), value)
+    
+    @staticmethod
+    def _matrix_to_rpy(rot: np.ndarray):
+        sy = math.sqrt(rot[0, 0] * rot[0, 0] + rot[1, 0] * rot[1, 0])
+        singular = sy < 1e-6
+        if not singular:
+            roll = math.atan2(rot[2, 1], rot[2, 2])
+            pitch = math.atan2(-rot[2, 0], sy)
+            yaw = math.atan2(rot[1, 0], rot[0, 0])
+        else:
+            roll = math.atan2(-rot[1, 2], rot[1, 1])
+            pitch = math.atan2(-rot[2, 0], sy)
+            yaw = 0.0
+        return roll, pitch, yaw
+    
+    def _publish_cmd_vel(self, linear_x: float, angular_z: float) -> None:
+        msg = Twist()
+        msg.linear.x = float(linear_x)
+        msg.angular.z = float(angular_z)
+        self._cmd_vel_pub.publish(msg)
+    
+    def _publish_head_delta(self, roll: float, pitch: float, yaw: float) -> None:
+        msg = Vector3Stamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = "vp_head_delta_start"
+        msg.vector.x = float(roll)
+        msg.vector.y = float(pitch)
+        msg.vector.z = float(yaw)
+        self._head_delta_pub.publish(msg)
+    
+    def _publish_controller_state(
+        self,
+        enabled: bool,
+        tracking_active: bool,
+        dot_x: float,
+        dot_y: float,
+        cmd_linear_x: float,
+        cmd_angular_z: float,
+        head_roll: float,
+        head_pitch: float,
+        head_yaw: float,
+    ) -> None:
+        self._publish_cmd_vel(cmd_linear_x, cmd_angular_z)
+        self._publish_head_delta(head_roll, head_pitch, head_yaw)
+        if self.streamer is not None:
+            self.streamer.send_control_message(
+                {
+                    "type": "controller_state",
+                    "enabled": bool(enabled),
+                    "tracking_active": bool(tracking_active),
+                    "dot_x": float(dot_x),
+                    "dot_y": float(dot_y),
+                    "cmd_linear_x": float(cmd_linear_x),
+                    "cmd_angular_z": float(cmd_angular_z),
+                    "head_delta_roll": float(head_roll),
+                    "head_delta_pitch": float(head_pitch),
+                    "head_delta_yaw": float(head_yaw),
+                }
+            )
+    
+    def _update_controller_mode(self) -> None:
+        now = time.monotonic()
+        with self._controller_lock:
+            enabled = self._controller_mode_enabled
+            zero_pending = self._controller_zero_pending
+            last_publish_time = self._controller_last_publish_time
+        
+        if not enabled:
+            if zero_pending:
+                self._publish_controller_state(
+                    enabled=False,
+                    tracking_active=False,
+                    dot_x=0.0,
+                    dot_y=0.0,
+                    cmd_linear_x=0.0,
+                    cmd_angular_z=0.0,
+                    head_roll=0.0,
+                    head_pitch=0.0,
+                    head_yaw=0.0,
+                )
+                with self._controller_lock:
+                    self._controller_zero_pending = False
+                    self._controller_last_publish_time = now
+            return
+        
+        should_publish = (now - last_publish_time) >= self._controller_publish_interval
+        if not should_publish:
+            return
+        
+        tracking = self.streamer.get_latest(use_cache=True, cache_ms=5) if self.streamer is not None else None
+        if tracking is None or tracking.head is None or tracking.right is None:
+            self._publish_controller_state(
+                enabled=True,
+                tracking_active=False,
+                dot_x=0.0,
+                dot_y=0.0,
+                cmd_linear_x=0.0,
+                cmd_angular_z=0.0,
+                head_roll=0.0,
+                head_pitch=0.0,
+                head_yaw=0.0,
+            )
+            with self._controller_lock:
+                self._controller_tracking_active = False
+                self._controller_anchor_wrist = None
+                self._controller_dot_x = 0.0
+                self._controller_dot_y = 0.0
+                self._controller_zero_pending = False
+                self._controller_last_publish_time = now
+            return
+        
+        try:
+            head_mat = np.asarray(tracking.head, dtype=np.float64)
+            right_wrist = np.asarray(tracking.right.wrist, dtype=np.float64)
+            pinch_distance = float(getattr(tracking.right, "pinch_distance", 1.0))
+        except Exception:
+            return
+        
+        if head_mat.shape != (4, 4) or right_wrist.shape != (4, 4):
+            return
+        
+        head_rot = head_mat[:3, :3]
+        wrist_pos = right_wrist[:3, 3]
+        
+        with self._controller_lock:
+            if self._controller_head_ref_rot is None:
+                self._controller_head_ref_rot = head_rot.copy()
+            head_ref_rot = self._controller_head_ref_rot.copy()
+            tracking_active = self._controller_tracking_active
+            anchor = None if self._controller_anchor_wrist is None else self._controller_anchor_wrist.copy()
+        
+        if not tracking_active and pinch_distance <= self._controller_pinch_start:
+            tracking_active = True
+            anchor = wrist_pos.copy()
+        elif tracking_active and pinch_distance >= self._controller_pinch_release:
+            tracking_active = False
+            anchor = None
+        
+        dot_x = 0.0
+        dot_y = 0.0
+        if tracking_active and anchor is not None:
+            delta_world = wrist_pos - anchor
+            delta_ref = head_ref_rot.T @ delta_world
+            norm_x = float(np.clip(delta_ref[0] / self._controller_max_delta_m, -1.0, 1.0))
+            norm_y = float(np.clip(delta_ref[1] / self._controller_max_delta_m, -1.0, 1.0))
+            dot_x = self._apply_deadzone(norm_x)
+            dot_y = self._apply_deadzone(norm_y)
+        else:
+            tracking_active = False
+            anchor = None
+        
+        cmd_linear_x = float(np.clip(dot_y * self._controller_linear_scale, -self._controller_max_linear_x, self._controller_max_linear_x))
+        cmd_angular_z = float(np.clip(-dot_x * self._controller_angular_scale, -self._controller_max_angular_z, self._controller_max_angular_z))
+        
+        delta_rot = head_ref_rot.T @ head_rot
+        head_roll, head_pitch, head_yaw = self._matrix_to_rpy(delta_rot)
+        
+        self._publish_controller_state(
+            enabled=True,
+            tracking_active=tracking_active,
+            dot_x=dot_x,
+            dot_y=dot_y,
+            cmd_linear_x=cmd_linear_x,
+            cmd_angular_z=cmd_angular_z,
+            head_roll=head_roll,
+            head_pitch=head_pitch,
+            head_yaw=head_yaw,
+        )
+        
+        with self._controller_lock:
+            self._controller_tracking_active = tracking_active
+            self._controller_anchor_wrist = anchor
+            self._controller_dot_x = dot_x
+            self._controller_dot_y = dot_y
+            self._controller_zero_pending = False
+            self._controller_last_publish_time = now
 
     def _update_scene(self) -> None:
+        self._update_controller_mode()
         with self._reset_lock:
             # If a final reset has been requested (model/data available),
             # handle swap in the sim thread.
@@ -1064,6 +1337,10 @@ class VPStreamer(Node):
                 self._motor_gain = 0.0
 
     def destroy_node(self):
+        try:
+            self._publish_cmd_vel(0.0, 0.0)
+        except Exception:
+            pass
         self._stop_event.set()
         if getattr(self, "_camera_thread", None):
             self._camera_thread.join(timeout=1.0)

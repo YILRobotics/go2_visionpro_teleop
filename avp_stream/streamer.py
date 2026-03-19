@@ -956,6 +956,7 @@ class VisionProStreamer:
         self._benchmark_condition = Condition()
         self._benchmark_events = {}
         self._reset_callbacks: List[Callable[[Any, Any], None]] = []
+        self._control_callbacks: List[Callable[[Dict[str, Any]], None]] = []
         self._pointcloud_payload = None
         self._pointcloud_lock = Lock()
         self._pointcloud_thread = None
@@ -1523,6 +1524,12 @@ class VisionProStreamer:
             self._log("[CONTROL] Failed to decode control message JSON", force=True)
             return
 
+        if not isinstance(payload, dict):
+            self._log(f"[CONTROL] Invalid control payload type: {type(payload)}", force=True)
+            return
+
+        self._notify_control_callbacks(payload)
+
         command = payload.get("type")
         if command == "reset":
             self._log("[CONTROL] Reset command received from VisionOS", force=True)
@@ -1539,6 +1546,17 @@ class VisionProStreamer:
                 pass
 
             Thread(target=self._handle_reset_request, daemon=True).start()
+        elif command == "controller_mode":
+            enabled_raw = payload.get("enabled", False)
+            enabled = bool(enabled_raw)
+            if isinstance(enabled_raw, str):
+                enabled = enabled_raw.strip().lower() in ("1", "true", "yes", "on")
+            self._log(f"[CONTROL] Controller mode command received (enabled={enabled})", force=True)
+            self._send_control_response({
+                "type": "controller_mode_ack",
+                "enabled": enabled,
+                "status": "ok",
+            })
         else:
             self._log(f"[CONTROL] Unknown control command: {command}", force=True)
 
@@ -1570,6 +1588,24 @@ class VisionProStreamer:
             )
         except Exception:
             pass
+
+    def register_control_callback(self, callback: Callable[[Dict[str, Any]], None]):
+        """Register a callback invoked for every decoded control payload."""
+        self._control_callbacks.append(callback)
+        try:
+            logging.getLogger(__name__).info(
+                f"[CONTROL] register_control_callback called; total_callbacks={len(self._control_callbacks)}, callback_id={id(callback)}"
+            )
+        except Exception:
+            pass
+
+    def _notify_control_callbacks(self, payload: Dict[str, Any]):
+        callbacks = list(self._control_callbacks)
+        for callback in callbacks:
+            try:
+                callback(payload)
+            except Exception as exc:  # pragma: no cover - best-effort notification
+                self._log(f"[CONTROL] Control callback failed: {exc}", force=True)
 
     def _notify_reset_callbacks(self, model, data):
         callbacks = list(self._reset_callbacks)
@@ -1653,7 +1689,7 @@ class VisionProStreamer:
         channel = self._control_channel
         if channel is None or channel.readyState != "open":
             self._log("[CONTROL] Control channel not open; cannot send response", force=True)
-            return
+            return False
 
         try:
             # channel.send(json.dumps(payload))
@@ -1661,8 +1697,14 @@ class VisionProStreamer:
             self._send_control_response_async(payload),
             self._webrtc_loop
             )
+            return True
         except Exception as exc:
             self._log(f"[CONTROL] Failed to send control response: {exc}", force=True)
+            return False
+
+    def send_control_message(self, payload: Dict[str, Any]) -> bool:
+        """Send a generic control payload to VisionOS over the control channel."""
+        return self._send_control_response(payload)
 
     async def _send_control_response_async(self, payload: Dict[str, Any]):
         """Async helper to send control responses over the WebRTC data channel.
