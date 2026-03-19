@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 70;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -86,7 +86,7 @@
 		1638F80C2B50BC9700E0CAD2 /* DebugView.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = DebugView.md; sourceTree = "<group>"; };
 		1642FAB42B4D54A60084F9ED /* 🛠️SettingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "🛠️SettingPanel.swift"; sourceTree = "<group>"; };
 		1642FAB82B4D6CAA0084F9ED /* 🌐RealityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "🌐RealityView.swift"; sourceTree = "<group>"; };
-		165ADB472B4B71B0008A756F /* Tracking Streamer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Tracking Streamer.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		165ADB472B4B71B0008A756F /* Go2 Teleop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Go2 Teleop.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		165ADB4E2B4B71B0008A756F /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		165ADB502B4B71B0008A756F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		165ADB522B4B71B2008A756F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -111,7 +111,7 @@
 		C1C7672E2EF1F0E20020844F /* AccessoryTrackingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessoryTrackingManager.swift; sourceTree = "<group>"; };
 		C1C767302EF220010020844F /* SignalingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalingClient.swift; sourceTree = "<group>"; };
 		C1DA80C32ECE377600B55CC2 /* StatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusView.swift; sourceTree = "<group>"; };
-		C1DA80C52ECE821800B55CC2 /* VisionProTeleop.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = VisionProTeleop.entitlements; sourceTree = "<group>"; };
+		C1DA80C52ECE821800B55CC2 /* Go2 Teleop.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Go2 Teleop.entitlements"; sourceTree = "<group>"; };
 		C1DA80C62ECE8C6F00B55CC2 /* ViewControlSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewControlSettings.swift; sourceTree = "<group>"; };
 		C1DA80D92ED0F4C500B55CC2 /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
 		C1E05F792ECD850B0018C506 /* ImageData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageData.swift; sourceTree = "<group>"; };
@@ -136,10 +136,6 @@
 		C1EAFABA2EE0CB1700549580 /* MultipeerCalibrationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipeerCalibrationManager.swift; sourceTree = "<group>"; };
 		C1EAFABE2EE11B5D00549580 /* CameraCalibrationWizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCalibrationWizardView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		C1EAF9C82EDBF9C100549580 /* Tracking Viewer */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "Tracking Viewer"; sourceTree = "<group>"; };
-/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		165ADB442B4B71B0008A756F /* Frameworks */ = {
@@ -199,8 +195,7 @@
 			isa = PBXGroup;
 			children = (
 				16267B532B57D387000CA8AD /* README.md */,
-				165ADB492B4B71B0008A756F /* Tracking Streamer */,
-				C1EAF9C82EDBF9C100549580 /* Tracking Viewer */,
+				165ADB492B4B71B0008A756F /* Go2 Teleop */,
 				C1EAFA2B2EDCF63F00549580 /* Frameworks */,
 				165ADB482B4B71B0008A756F /* Products */,
 			);
@@ -209,15 +204,15 @@
 		165ADB482B4B71B0008A756F /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				165ADB472B4B71B0008A756F /* Tracking Streamer.app */,
+				165ADB472B4B71B0008A756F /* Go2 Teleop.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		165ADB492B4B71B0008A756F /* Tracking Streamer */ = {
+		165ADB492B4B71B0008A756F /* Go2 Teleop */ = {
 			isa = PBXGroup;
 			children = (
-				C1DA80C52ECE821800B55CC2 /* VisionProTeleop.entitlements */,
+				C1DA80C52ECE821800B55CC2 /* Go2 Teleop.entitlements */,
 				C1GRPC032B93C1AC00F2269D /* Proto */,
 				165ADB4E2B4B71B0008A756F /* App.swift */,
 				165ADB502B4B71B0008A756F /* ContentView.swift */,
@@ -254,7 +249,7 @@
 				16267B4E2B57D148000CA8AD /* Supporting files */,
 				C1EAFAB62EE0C33100549580 /* ExtrinsicCalibrationView_New.swift */,
 			);
-			path = "Tracking Streamer";
+			path = "Go2 Teleop";
 			sourceTree = "<group>";
 		};
 		16C95ADF2B5E74FD00CF0FED /* 🛠️Menu */ = {
@@ -307,9 +302,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		165ADB462B4B71B0008A756F /* Tracking Streamer */ = {
+		165ADB462B4B71B0008A756F /* Go2 Teleop */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 165ADB5A2B4B71B2008A756F /* Build configuration list for PBXNativeTarget "Tracking Streamer" */;
+			buildConfigurationList = 165ADB5A2B4B71B2008A756F /* Build configuration list for PBXNativeTarget "Go2 Teleop" */;
 			buildPhases = (
 				165ADB432B4B71B0008A756F /* Sources */,
 				165ADB442B4B71B0008A756F /* Frameworks */,
@@ -320,7 +315,7 @@
 			);
 			dependencies = (
 			);
-			name = "Tracking Streamer";
+			name = "Go2 Teleop";
 			packageProductDependencies = (
 				C14DAF522B7C375D00A7333E /* GRPCCore */,
 				C14DAF622B7C375D00A7333E /* GRPCNIOTransportHTTP2 */,
@@ -329,7 +324,7 @@
 				C1DA80DB2ED0F61D00B55CC2 /* RealityKitContent */,
 			);
 			productName = HandsWidth;
-			productReference = 165ADB472B4B71B0008A756F /* Tracking Streamer.app */;
+			productReference = 165ADB472B4B71B0008A756F /* Go2 Teleop.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -347,7 +342,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 165ADB422B4B71B0008A756F /* Build configuration list for PBXProject "Tracking Streamer" */;
+			buildConfigurationList = 165ADB422B4B71B0008A756F /* Build configuration list for PBXProject "Go2 Teleop" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -362,13 +357,13 @@
 				C14DAF612B7C375D00A7333E /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */,
 				C14DAF712B7C375D00A7333E /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */,
 				C1E05F762ECD84DF0018C506 /* XCRemoteSwiftPackageReference "webrtc-xcframework" */,
-				C1DA80DA2ED0F61D00B55CC2 /* XCLocalSwiftPackageReference "Tracking Streamer/Supporting files/RealityKitContent" */,
+				C1DA80DA2ED0F61D00B55CC2 /* XCLocalSwiftPackageReference "Go2 Teleop/Supporting files/RealityKitContent" */,
 			);
 			productRefGroup = 165ADB482B4B71B0008A756F /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				165ADB462B4B71B0008A756F /* Tracking Streamer */,
+				165ADB462B4B71B0008A756F /* Go2 Teleop */,
 			);
 		};
 /* End PBXProject section */
@@ -568,7 +563,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
-				CODE_SIGN_ENTITLEMENTS = "Tracking Streamer/VisionProTeleop.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Go2 Teleop/Go2 Teleop.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 16;
@@ -577,12 +572,12 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Supporting files/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Tracking Streamer";
+				INFOPLIST_KEY_CFBundleDisplayName = "Go2 Teleop";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSAccessoryTrackingUsageDescription = "VisionProTeleop uses accessory tracking to stream spatial controller poses for teleoperation.";
-				INFOPLIST_KEY_NSCameraUsageDescription = "VisionProTeleop needs camera access to display video from connected USB cameras (UVC devices).";
+				INFOPLIST_KEY_NSAccessoryTrackingUsageDescription = "Go2 Teleop uses accessory tracking to stream spatial controller poses for teleoperation.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Go2 Teleop needs camera access to display video from connected USB cameras (UVC devices).";
 				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "This app tracks your hand to teleoperate a robot. ";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app uses the local network to communicate with iPhone for real-time calibration synchronization.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses your microphone to communicate with the robot.";
@@ -592,12 +587,12 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 2.51;
-				PRODUCT_BUNDLE_IDENTIFIER = ferdinand.avp.teleop.vp1;
+				PRODUCT_BUNDLE_IDENTIFIER = ferdinand.go2.teleop.vp1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "Tracking Streamer/Tracking Streamer-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "Go2 Teleop/Go2 Teleop-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				XROS_DEPLOYMENT_TARGET = 2.1;
@@ -610,7 +605,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
-				CODE_SIGN_ENTITLEMENTS = "Tracking Streamer/VisionProTeleop.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Go2 Teleop/Go2 Teleop.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 16;
@@ -619,12 +614,12 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Supporting files/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Tracking Streamer";
+				INFOPLIST_KEY_CFBundleDisplayName = "Go2 Teleop";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSAccessoryTrackingUsageDescription = "VisionProTeleop uses accessory tracking to stream spatial controller poses for teleoperation.";
-				INFOPLIST_KEY_NSCameraUsageDescription = "VisionProTeleop needs camera access to display video from connected USB cameras (UVC devices).";
+				INFOPLIST_KEY_NSAccessoryTrackingUsageDescription = "Go2 Teleop uses accessory tracking to stream spatial controller poses for teleoperation.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Go2 Teleop needs camera access to display video from connected USB cameras (UVC devices).";
 				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "This app tracks your hand to teleoperate a robot. ";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app uses the local network to communicate with iPhone for real-time calibration synchronization.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses your microphone to communicate with the robot.";
@@ -634,12 +629,12 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 2.51;
-				PRODUCT_BUNDLE_IDENTIFIER = ferdinand.avp.teleop.vp1;
+				PRODUCT_BUNDLE_IDENTIFIER = ferdinand.go2.teleop.vp1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "Tracking Streamer/Tracking Streamer-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "Go2 Teleop/Go2 Teleop-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				XROS_DEPLOYMENT_TARGET = 2.1;
@@ -649,7 +644,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		165ADB422B4B71B0008A756F /* Build configuration list for PBXProject "Tracking Streamer" */ = {
+		165ADB422B4B71B0008A756F /* Build configuration list for PBXProject "Go2 Teleop" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				165ADB582B4B71B2008A756F /* Debug */,
@@ -658,7 +653,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		165ADB5A2B4B71B2008A756F /* Build configuration list for PBXNativeTarget "Tracking Streamer" */ = {
+		165ADB5A2B4B71B2008A756F /* Build configuration list for PBXNativeTarget "Go2 Teleop" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				165ADB5B2B4B71B2008A756F /* Debug */,
@@ -670,9 +665,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		C1DA80DA2ED0F61D00B55CC2 /* XCLocalSwiftPackageReference "Tracking Streamer/Supporting files/RealityKitContent" */ = {
+		C1DA80DA2ED0F61D00B55CC2 /* XCLocalSwiftPackageReference "Go2 Teleop/Supporting files/RealityKitContent" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = "Tracking Streamer/Supporting files/RealityKitContent";
+			relativePath = "Go2 Teleop/Supporting files/RealityKitContent";
 		};
 /* End XCLocalSwiftPackageReference section */
 

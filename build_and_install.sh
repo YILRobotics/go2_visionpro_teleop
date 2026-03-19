@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Build and Install Script for Tracking Streamer (Vision Pro App)
+# Build and Install Script for Go2 Teleop (Vision Pro App)
 #
 # This script builds the Xcode project and installs it to either a simulator
 # or a physical device based on the input argument.
@@ -26,13 +26,13 @@ set -e  # Exit on error
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$SCRIPT_DIR"
-PROJECT_NAME="Tracking Streamer"
-SCHEME="VisionProTeleop"
+PROJECT_NAME="Go2 Teleop"
+SCHEME="Go2 Teleop"
 BUNDLE_ID="improbable.younghyo.DexTeleop2"
 
 # Use a persistent build directory outside iCloud Drive for incremental builds
 # This avoids iCloud extended attributes AND preserves build cache between runs
-BUILD_DIR="$HOME/.visionpro-build/VisionProTeleop"
+BUILD_DIR="$HOME/.visionpro-build/Go2Teleop"
 
 # Xcode path - change this if you want to use a different Xcode version
 XCODE_PATH="/Applications/Xcode.app"
@@ -366,7 +366,7 @@ main() {
     
     echo ""
     echo "=========================================="
-    echo "  Tracking Streamer Build & Install"
+    echo "  Go2 Teleop Build & Install"
     echo "=========================================="
     echo ""
     
@@ -407,7 +407,7 @@ main() {
         
         SIM_ID=$(get_simulator_id)
         # Stream logs from simulator, filtering by our bundle ID
-        xcrun simctl spawn "$SIM_ID" log stream --predicate "subsystem CONTAINS '$BUNDLE_ID' OR process CONTAINS 'Tracking Streamer'" --style compact
+        xcrun simctl spawn "$SIM_ID" log stream --predicate "subsystem CONTAINS '$BUNDLE_ID' OR process CONTAINS 'Go2 Teleop'" --style compact
         exit 0
         
     elif [ "$target" = "logs-device" ]; then
@@ -419,7 +419,7 @@ main() {
         DEVICE_ID=$(get_device_id)
         # Stream logs from device using devicectl
         xcrun devicectl device info consoleOutput --device "$DEVICE_ID" 2>/dev/null || \
-            log stream --device "$DEVICE_ID" --predicate "subsystem CONTAINS '$BUNDLE_ID' OR process CONTAINS 'Tracking Streamer'" --style compact
+            log stream --device "$DEVICE_ID" --predicate "subsystem CONTAINS '$BUNDLE_ID' OR process CONTAINS 'Go2 Teleop'" --style compact
         exit 0
         
     elif [ "$target" = "build" ]; then

@@ -15,11 +15,11 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 28) {
             VStack(spacing: 6) {
-                Text("VisionProTeleop")
+                Text("Go2 Teleop")
                     .font(.system(size: 64, weight: .bold))
                     .foregroundColor(.white)
 
-                Text("Tracking Streamer")
+                Text("Vision Pro Teleoperation")
                     .font(.title)
                     .foregroundColor(.white.opacity(0.75))
             }

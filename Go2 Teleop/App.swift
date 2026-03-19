@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct VisionProTeleopApp: App {
+struct Go2TeleopApp: App {
     @StateObject private var imageData = ImageData()
     @StateObject private var appModel = 🥽AppModel()
     
@@ -35,7 +35,7 @@ struct VisionProTeleopApp: App {
     }
     
     init() {
-        dlog("🚀 [DEBUG] VisionProTeleopApp.init() - App launching...")
+        dlog("🚀 [DEBUG] Go2TeleopApp.init() - App launching...")
         🧑HeadTrackingComponent.registerComponent()
         🧑HeadTrackingSystem.registerSystem()
         

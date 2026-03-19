@@ -13,14 +13,14 @@
 
 ### Step 1. Open Xcode Project
 
-After you `git cloned` the project, double click `VisionProTeleop.xcodproj`. This will automatically open up Xcode where you can install the app. 
+After you `git cloned` the project, double click `Go2 Teleop.xcodeproj`. This will automatically open up Xcode where you can install the app. 
 
 
 ### Step 2. Register your developer account
 
 ![](https://share.cleanshot.com/r2fj3GXg+)
 
-On the left side bar, click on `VisionProTeleop`. Under Targets - Signing & Capabilities - Team, click `Add an Account` and follow the steps to add your Apple Developer Account. Then, change the `Bundle Identifier` to a unique name of yours. 
+On the left side bar, click on `Go2 Teleop`. Under Targets - Signing & Capabilities - Team, click `Add an Account` and follow the steps to add your Apple Developer Account. Then, change the `Bundle Identifier` to a unique name of yours. 
 
 ### Step 3. Connect Apple Vision Pro to your Mac
 
@@ -33,6 +33,5 @@ Then, click the `play` button to start installing. If everrything went well, you
 ### Step 4. Enjoy the App! 
 
 Once you've successfully installed the App, you can disconnect the Vision Pro from your Mac, and use it as a standalone device/app without the Mac. You will see an App Icon on your home screen. Click on the icon to run the app and start streaming. 
-
 
 

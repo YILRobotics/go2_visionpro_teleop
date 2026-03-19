@@ -8,7 +8,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Tracking Streamer"
+            "value" : "Go2 Teleop"
           }
         }
       }
@@ -20,13 +20,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Tracking Streamer"
+            "value" : "Go2 Teleop"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "手がメジャー"
+            "value" : "Go2 Teleop"
           }
         }
       }
@@ -38,7 +38,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "VisionProTeleop uses accessory tracking to stream spatial controller poses for teleoperation."
+            "value" : "Go2 Teleop uses accessory tracking to stream spatial controller poses for teleoperation."
           }
         }
       }
@@ -50,7 +50,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "VisionProTeleop needs camera access to display video from connected USB cameras (UVC devices)."
+            "value" : "Go2 Teleop needs camera access to display video from connected USB cameras (UVC devices)."
           }
         }
       }

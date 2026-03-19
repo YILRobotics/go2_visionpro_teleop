@@ -1225,7 +1225,7 @@ class RecordingManager: ObservableObject {
     
     /// Get a user-friendly description of where recordings are stored
     func getStorageDescription() -> String {
-        return "On My Vision Pro → Tracking Streamer → Recordings"
+        return "On My Vision Pro → Go2 Teleop → Recordings"
     }
 }
 

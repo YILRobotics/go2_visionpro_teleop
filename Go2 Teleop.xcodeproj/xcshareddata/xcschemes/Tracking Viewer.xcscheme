@@ -18,7 +18,7 @@
                BlueprintIdentifier = "C1EAF9C62EDBF9C100549580"
                BuildableName = "Tracking Viewer.app"
                BlueprintName = "Tracking Viewer"
-               ReferencedContainer = "container:Tracking Streamer.xcodeproj">
+               ReferencedContainer = "container:Go2 Teleop.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -47,7 +47,7 @@
             BlueprintIdentifier = "C1EAF9C62EDBF9C100549580"
             BuildableName = "Tracking Viewer.app"
             BlueprintName = "Tracking Viewer"
-            ReferencedContainer = "container:Tracking Streamer.xcodeproj">
+            ReferencedContainer = "container:Go2 Teleop.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -64,7 +64,7 @@
             BlueprintIdentifier = "C1EAF9C62EDBF9C100549580"
             BuildableName = "Tracking Viewer.app"
             BlueprintName = "Tracking Viewer"
-            ReferencedContainer = "container:Tracking Streamer.xcodeproj">
+            ReferencedContainer = "container:Go2 Teleop.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

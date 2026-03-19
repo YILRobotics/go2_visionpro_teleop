@@ -579,7 +579,7 @@ struct StatusOverlay: View {
                 
                 Spacer()
                 
-                Text("VisionProTeleop")
+                Text("Go2 Teleop")
                     .font(.system(size: 26, weight: .bold))
                     .foregroundColor(.white)
                 
